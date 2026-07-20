@@ -72,9 +72,17 @@ def to_graph_data(subgraph: nx.Graph | None = None) -> GraphData:
     )
 
 
+def get_subgraph_by_document(document_id: str) -> nx.Graph:
+    g = get_graph()
+    matching = [
+        nid for nid, data in g.nodes(data=True)
+        if document_id in json.loads(data.get("document_ids", "[]"))
+    ]
+    return g.subgraph(matching).copy()
+
+
 def get_subgraph(entity_label: str, depth: int = 2) -> nx.Graph:
     g = get_graph()
-    # Find node by label
     target_node = None
     for node_id, data in g.nodes(data=True):
         if data.get("label", node_id).lower() == entity_label.lower():
@@ -93,3 +101,4 @@ def get_subgraph(entity_label: str, depth: int = 2) -> nx.Graph:
         frontier = next_frontier
 
     return g.subgraph(nodes).copy()
+

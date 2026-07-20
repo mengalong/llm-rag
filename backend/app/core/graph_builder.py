@@ -31,6 +31,23 @@ def _node_id(label: str) -> str:
     return hashlib.md5(label.strip().lower().encode()).hexdigest()[:16]
 
 
+VALID_ENTITY_TYPES = {'PERSON', 'ORG', 'GPE', 'PRODUCT', 'LOC', 'WORK_OF_ART', 'EVENT', 'FAC', 'NORP'}
+
+
+def _is_valid_entity(text: str, label: str) -> bool:
+    if label not in VALID_ENTITY_TYPES:
+        return False
+    if len(text) < 2:
+        return False
+    if text.isdigit():
+        return False
+    # filter lone punctuation / numbers with punctuation e.g. "1." "（3）"
+    import re
+    if re.fullmatch(r'[\d\s\.\、\。\，\,\(\)\（\）\【\】]+', text):
+        return False
+    return True
+
+
 def extract_and_add_entities(chunks: list[Chunk]) -> None:
     """Run spaCy NER on chunks and build/update the knowledge graph."""
     g = get_graph()
@@ -39,7 +56,11 @@ def extract_and_add_entities(chunks: list[Chunk]) -> None:
 
     for chunk in chunks:
         doc = nlp(chunk.content)
-        entities = [(ent.text.strip(), ent.label_) for ent in doc.ents if ent.text.strip()]
+        entities = [
+            (ent.text.strip(), ent.label_)
+            for ent in doc.ents
+            if ent.text.strip() and _is_valid_entity(ent.text.strip(), ent.label_)
+        ]
         if not entities:
             continue
         total_entities += len(entities)
