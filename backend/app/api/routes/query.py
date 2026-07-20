@@ -133,7 +133,7 @@ async def query_stream(question: str, top_k: int = 5, use_graph: bool = True):
 
 def _build_context(sources: list[Source]) -> str:
     return "\n\n---\n\n".join(
-        f"[Source: {s.chunk_id}]\n{s.excerpt}" for s in sources
+        f"[{i+1}]\n{s.excerpt}" for i, s in enumerate(sources)
     )
 
 
@@ -170,8 +170,19 @@ async def _stream_llm(question: str, context: str):
 
 def _build_system_prompt() -> str:
     return (
-        "You are a helpful assistant that answers questions based on the provided context. "
-        "When you use information from a specific source, cite it using the format [Source: <chunk_id>]. "
-        "Answer in the same language as the question. "
-        "If the context does not contain enough information to answer the question, say so honestly."
+        "You are a helpful assistant that answers questions based on the provided context.\n\n"
+        "## Output format rules (strictly follow all of them)\n\n"
+        "1. Use standard Markdown. Use ## or ### headings to divide content into sections. "
+        "Never simulate headings with plain bold text like **Title** on its own line.\n"
+        "2. Bold (**text**) is only for core conclusions, key definitions, or critical terms "
+        "that appear inline within a sentence — not as standalone header replacements.\n"
+        "3. Present parallel items using unordered lists (- item). "
+        "Do not write list items as plain sentences separated only by line breaks.\n"
+        "4. Any paragraph longer than 300 characters must be split into shorter focused paragraphs. "
+        "One paragraph = one idea.\n"
+        "5. Leave one blank line between different content sections (heading → content, list → next paragraph, etc.).\n"
+        "6. Citation markers [1], [2], etc. must appear immediately after the relevant sentence "
+        "on the same line — never on a separate line or at the start of a new paragraph.\n"
+        "7. Answer in the same language as the question.\n"
+        "8. If the context does not contain enough information, say so honestly.\n"
     )
