@@ -13,6 +13,7 @@ export interface ChatSession {
 }
 
 const STORAGE_KEY = 'rag_chat_sessions'
+const ACTIVE_SESSION_KEY = 'rag_active_session'
 
 export function loadSessions(): ChatSession[] {
   try {
@@ -24,6 +25,14 @@ export function loadSessions(): ChatSession[] {
 
 export function saveSessions(sessions: ChatSession[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions))
+}
+
+export function loadActiveSessionId(): string | null {
+  return localStorage.getItem(ACTIVE_SESSION_KEY)
+}
+
+export function saveActiveSessionId(id: string): void {
+  localStorage.setItem(ACTIVE_SESSION_KEY, id)
 }
 
 export function createSession(): ChatSession {

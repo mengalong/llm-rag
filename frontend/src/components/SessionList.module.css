@@ -62,4 +62,23 @@
   transition: background 0.15s;
   margin-bottom: 6px;
 }
-.newBtn:hover { background: var(--surface); }
+.bottom {
+  padding: 8px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.themeBtn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 8px);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 6px 10px;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+.themeBtn:hover { background: var(--surface); color: var(--text); }

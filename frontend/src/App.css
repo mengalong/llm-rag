@@ -18,8 +18,26 @@
   --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
 }
 
+/* Manual dark override — takes precedence over system light preference */
+:root[data-theme="dark"] {
+  --bg: #1a1a2e;
+  --sidebar-bg: #12121f;
+  --surface: #252540;
+  --surface-hover: #2e2e50;
+  --border: #2e2e50;
+  --text: #e8e8f0;
+  --text-muted: #8080a8;
+  --accent: #6366f1;
+  --accent-hover: #4f52d9;
+  --accent-subtle: rgba(99,102,241,0.12);
+  --danger: #ef4444;
+  --input-bg: #252540;
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.35);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+}
+
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
     --bg: #f5f5fa;
     --sidebar-bg: #ebebf5;
     --surface: #ffffff;
@@ -35,6 +53,23 @@
     --shadow-sm: 0 1px 4px rgba(0,0,0,0.08);
     --shadow-md: 0 4px 12px rgba(0,0,0,0.10);
   }
+}
+
+:root[data-theme="light"] {
+  --bg: #f5f5fa;
+  --sidebar-bg: #ebebf5;
+  --surface: #ffffff;
+  --surface-hover: #f0f0f8;
+  --border: #dcdcee;
+  --text: #111128;
+  --text-muted: #6b6b90;
+  --accent: #6366f1;
+  --accent-hover: #4f52d9;
+  --accent-subtle: rgba(99,102,241,0.10);
+  --danger: #dc2626;
+  --input-bg: #ffffff;
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.10);
 }
 
 body {
@@ -135,3 +170,19 @@ body {
   display: flex;
   flex-direction: column;
 }
+.themeToggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 5px 10px;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+  margin-top: 4px;
+}
+.themeToggle:hover { background: var(--surface); color: var(--text); }
+

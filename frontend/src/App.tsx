@@ -7,27 +7,59 @@ import { useDocuments } from './hooks/useDocuments'
 import { getGraph, getSubgraph, type GraphData, type ChunkSettings } from './api/client'
 import {
   loadSessions, saveSessions, createSession,
+  loadActiveSessionId, saveActiveSessionId,
   type ChatSession,
 } from './api/sessions'
 import './App.css'
 
 type Tab = 'chat' | 'docs' | 'graph'
+type Theme = 'dark' | 'light'
+
+function useTheme(): [Theme, () => void] {
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem('theme') as Theme | null
+    if (saved === 'light' || saved === 'dark') return saved
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  })
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
+  }, [theme])
+
+  const toggle = useCallback(() => setTheme((t) => t === 'dark' ? 'light' : 'dark'), [])
+  return [theme, toggle]
+}
 
 export default function App() {
   const { docs, refresh, upload, uploading, uploadProgress, error: docError } = useDocuments()
   const [activeTab, setActiveTab] = useState<Tab>('chat')
+  const [theme, toggleTheme] = useTheme()
 
-  // Sessions
+  // Sessions — restore last active session on load
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
     const saved = loadSessions()
     return saved.length > 0 ? saved : [createSession()]
   })
-  const [activeSessionId, setActiveSessionId] = useState<string>(() => sessions[0].id)
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => {
+    const saved = loadSessions()
+    if (saved.length === 0) return createSession().id
+    const lastId = loadActiveSessionId()
+    // pick the most recent session by default, fall back to saved id if it still exists
+    const mostRecent = saved[saved.length - 1].id
+    return (lastId && saved.some((s) => s.id === lastId)) ? lastId : mostRecent
+  })
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? sessions[0]
 
   const persistSessions = useCallback((updated: ChatSession[]) => {
     setSessions(updated)
     saveSessions(updated)
+  }, [])
+
+  const handleSessionSelect = useCallback((id: string) => {
+    setActiveSessionId(id)
+    saveActiveSessionId(id)
   }, [])
 
   const handleSessionUpdate = useCallback((updated: ChatSession) => {
@@ -41,20 +73,23 @@ export default function App() {
   const handleNewSession = useCallback(() => {
     const s = createSession()
     persistSessions([...sessions, s])
-    setActiveSessionId(s.id)
-  }, [sessions, persistSessions])
+    handleSessionSelect(s.id)
+  }, [sessions, persistSessions, handleSessionSelect])
 
   const handleDeleteSession = useCallback((id: string) => {
     const remaining = sessions.filter((s) => s.id !== id)
     if (remaining.length === 0) {
       const s = createSession()
       persistSessions([s])
-      setActiveSessionId(s.id)
+      handleSessionSelect(s.id)
     } else {
       persistSessions(remaining)
-      if (activeSessionId === id) setActiveSessionId(remaining[remaining.length - 1].id)
+      if (activeSessionId === id) {
+        const next = remaining[remaining.length - 1].id
+        handleSessionSelect(next)
+      }
     }
-  }, [sessions, activeSessionId, persistSessions])
+  }, [sessions, activeSessionId, persistSessions, handleSessionSelect])
 
   // Graph
   const [fullGraphData, setFullGraphData] = useState<GraphData | null>(null)
@@ -83,9 +118,11 @@ export default function App() {
         <SessionList
           sessions={sessions}
           activeId={activeSessionId}
-          onSelect={setActiveSessionId}
+          onSelect={handleSessionSelect}
           onNew={handleNewSession}
           onDelete={handleDeleteSession}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       ) : (
         <aside className="sidebar">
@@ -120,9 +157,9 @@ export default function App() {
         </div>
 
         <div className="content">
-          {activeTab === 'chat' && (
+          <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             <ChatInterface session={activeSession} onSessionUpdate={handleSessionUpdate} />
-          )}
+          </div>
           {activeTab === 'docs' && (
             <DocumentsPage
               docs={docs}
