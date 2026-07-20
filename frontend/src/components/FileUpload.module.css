@@ -1,0 +1,53 @@
+.dropzone {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.dropzone:hover, .dragging {
+  border-color: var(--accent);
+  background: rgba(16, 163, 127, 0.06);
+  color: var(--text);
+}
+.uploading { cursor: default; border-color: var(--accent); }
+.progressWrap {
+  position: relative;
+  height: 18px;
+  background: var(--surface);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progressBar {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+.progressWrap span {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--text);
+}
+.newBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+  margin-bottom: 8px;
+}
+.newBtn:hover { background: var(--surface); }

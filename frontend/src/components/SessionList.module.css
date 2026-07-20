@@ -1,0 +1,59 @@
+.sidebar {
+  width: 220px;
+  min-width: 180px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 8px 12px;
+}
+.label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 10px 6px 4px;
+  font-weight: 600;
+}
+.list { flex: 1; overflow-y: auto; }
+.list::-webkit-scrollbar { width: 3px; }
+.list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+  transition: background 0.1s, color 0.1s;
+  user-select: none;
+}
+.item:hover { background: var(--surface); color: var(--text); }
+.item.active { background: var(--surface); color: var(--text); font-weight: 500; }
+.title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.del {
+  background: none; border: none; color: transparent;
+  cursor: pointer; font-size: 14px; padding: 0; flex-shrink: 0;
+  transition: color 0.1s;
+}
+.item:hover .del { color: var(--text-muted); }
+.del:hover { color: var(--danger) !important; }
+.newBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+  margin-bottom: 6px;
+}
+.newBtn:hover { background: var(--surface); }

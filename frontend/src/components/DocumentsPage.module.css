@@ -1,0 +1,230 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.toolbarTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.strategyBtn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 5px 12px;
+  transition: background 0.1s, color 0.1s;
+  flex-shrink: 0;
+}
+.strategyBtn:hover, .strategyBtnActive { background: var(--surface-hover); color: var(--text); }
+.dropzone {
+  display: flex; align-items: center; justify-content: center;
+  padding: 6px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+  transition: border-color 0.15s, background 0.15s;
+  min-width: 110px;
+  margin-left: auto;
+}
+.dropzone:hover, .dragOver { border-color: var(--accent); color: var(--text); background: rgba(16,163,127,0.05); }
+.uploading { cursor: default; border-color: var(--accent); }
+.uploadProgress {
+  position: relative; width: 100%; height: 20px;
+  background: var(--surface); border-radius: 4px; overflow: hidden;
+}
+.uploadBar {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--accent); transition: width 0.2s;
+}
+.uploadProgress span {
+  position: relative; z-index: 1; font-size: 11px; line-height: 20px; color: #fff;
+}
+
+/* ── Strategy panel ── */
+.strategyPanel {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  background: var(--sidebar-bg);
+  flex-shrink: 0;
+}
+.strategyRow { display: flex; gap: 8px; margin-bottom: 12px; }
+.strategyOption {
+  flex: 1; display: flex; flex-direction: column; gap: 3px;
+  padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; cursor: pointer; text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.strategyOption:hover { background: var(--surface-hover); }
+.strategyOptionActive { border-color: var(--accent); background: rgba(16,163,127,0.08); }
+.strategyName { font-size: 13px; font-weight: 500; color: var(--text); }
+.strategyHint { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+.strategyParams {
+  display: flex; gap: 20px; align-items: center;
+}
+.strategyParams label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-muted);
+}
+.strategyParams input[type=number] {
+  width: 80px; padding: 4px 8px;
+  background: var(--input-bg); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text); font-size: 12px; outline: none;
+}
+.strategyParams input:focus { border-color: var(--accent); }
+
+/* ── Body ── */
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Doc list pane ── */
+.listPane {
+  width: 320px;
+  min-width: 260px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.listScroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.listScroll::-webkit-scrollbar { width: 4px; }
+.listScroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.docRow {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 10px; border-radius: 8px; cursor: pointer;
+  transition: background 0.1s;
+}
+.docRow:hover { background: var(--surface); }
+.docRow.selected { background: var(--surface); border-left: 2px solid var(--accent); padding-left: 8px; }
+.docIcon {
+  width: 32px; height: 32px; background: var(--surface-hover);
+  border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.docInfo { flex: 1; min-width: 0; }
+.docName {
+  font-size: 13px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text); margin-bottom: 4px;
+}
+.docMeta { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.badge { font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 500; }
+.badge-indexed  { background: rgba(16,163,127,0.15); color: #10a37f; }
+.badge-processing { background: rgba(250,173,20,0.15); color: #faad14; }
+.badge-pending  { background: rgba(142,142,160,0.15); color: #8e8ea0; }
+.badge-error    { background: rgba(239,68,68,0.15);   color: #ef4444; }
+.docChunks { font-size: 11px; color: var(--text-muted); }
+.docTimes { display: flex; gap: 10px; font-size: 11px; color: var(--text-muted); margin-bottom: 3px; }
+.docProgress { margin-top: 4px; }
+.progressBar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.progressFill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
+.progressStep { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.docError { font-size: 11px; color: #ef4444; margin-top: 2px; }
+.docDel {
+  background: none; border: none; color: transparent; cursor: pointer;
+  font-size: 16px; padding: 2px 4px; flex-shrink: 0; transition: color 0.1s;
+}
+.docRow:hover .docDel { color: var(--text-muted); }
+.docDel:hover { color: #ef4444 !important; }
+.emptyList { text-align: center; padding: 40px 16px; color: var(--text-muted); font-size: 13px; }
+
+/* ── Detail pane ── */
+.detailPane {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  min-height: 0;        /* ensure the pane itself can shrink */
+}
+.detailHeader {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.detailTitle {
+  font-size: 14px; font-weight: 600; color: var(--text); flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.detailMeta { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.searchBox { padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.searchInput {
+  width: 100%; padding: 6px 10px;
+  background: var(--input-bg); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-size: 13px; outline: none;
+}
+.searchInput:focus { border-color: var(--accent); }
+.searchInput::placeholder { color: var(--text-muted); }
+.chunkScroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;        /* critical: allow flex child to shrink below content size */
+}
+.chunkScroll::-webkit-scrollbar { width: 4px; }
+.chunkScroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.chunkCard {
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: visible;    /* allow expanded body to be fully visible */
+  flex-shrink: 0;       /* card itself must not shrink — scroll container handles overflow */
+}
+.chunkCardHeader {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; cursor: pointer;
+  transition: background 0.1s;
+  border-radius: 8px;
+}
+.chunkCardHeader:hover { background: rgba(255,255,255,0.03); }
+.chunkIdx {
+  font-size: 11px; font-weight: 600; color: var(--accent);
+  background: rgba(16,163,127,0.12); border-radius: 4px; padding: 1px 7px; flex-shrink: 0;
+}
+.chunkHeading { font-size: 12px; color: var(--text-muted); flex: 1; }
+.chunkPageBadge { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.chunkLen { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.chunkBody {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-top: 1px solid var(--border);
+  max-height: 400px;     /* cap expanded height so one card never fills the whole pane */
+  overflow-y: auto;      /* scroll within the card if content exceeds max-height */
+  border-radius: 0 0 8px 8px;
+}
+.chunkBody::-webkit-scrollbar { width: 4px; }
+.chunkBody::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.noSelect { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 14px; }
+.loadingChunks { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 13px; }
