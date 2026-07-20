@@ -3,7 +3,8 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useSSEQuery } from '../hooks/useSSE'
 import SourcePanel from './SourcePanel'
-import { type ChatSession, generateSessionTitle } from '../api/sessions'
+import GraphEntityModal from './GraphEntityModal'
+import { type ChatSession, type GraphPath, generateSessionTitle } from '../api/sessions'
 import styles from './ChatInterface.module.css'
 
 interface Props {
@@ -79,7 +80,9 @@ export default function ChatInterface({ session, onSessionUpdate }: Props) {
   const [input, setInput] = useState('')
   const [useGraph, setUseGraph] = useState(true)
   const [rawMsgIds, setRawMsgIds] = useState<Set<number>>(new Set())
-  const { answer, graphEntities, loading, error, ask, stop } = useSSEQuery()
+  const [expandedPaths, setExpandedPaths] = useState<Set<number>>(new Set())
+  const [entityModal, setEntityModal] = useState<string | null>(null)
+  const { answer, graphEntities, graphPaths, loading, error, ask, stop } = useSSEQuery()
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const sourcePanelRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -91,6 +94,14 @@ export default function ChatInterface({ session, onSessionUpdate }: Props) {
 
   const toggleRaw = useCallback((idx: number) => {
     setRawMsgIds((prev) => {
+      const next = new Set(prev)
+      next.has(idx) ? next.delete(idx) : next.add(idx)
+      return next
+    })
+  }, [])
+
+  const togglePaths = useCallback((idx: number) => {
+    setExpandedPaths((prev) => {
       const next = new Set(prev)
       next.has(idx) ? next.delete(idx) : next.add(idx)
       return next
@@ -125,12 +136,14 @@ export default function ChatInterface({ session, onSessionUpdate }: Props) {
     const updated = { ...session, messages: [...session.messages, userMsg] }
     onSessionUpdate(updated)
 
-    ask(q, useGraph, async (finalAnswer, finalSources, finalEntities) => {
+    ask(q, useGraph, async (finalAnswer, finalSources, finalEntities, finalPaths, finalGraphChunkIds) => {
       const assistantMsg = {
         role: 'assistant' as const,
         content: finalAnswer,
         sources: finalSources,
         graphEntities: finalEntities,
+        graphPaths: finalPaths,
+        graphChunkIds: finalGraphChunkIds,
       }
       const withAssistant = { ...updated, messages: [...updated.messages, assistantMsg] }
 
@@ -166,7 +179,17 @@ export default function ChatInterface({ session, onSessionUpdate }: Props) {
             <div key={i} className={`${styles.msgRow} ${msg.role === 'user' ? styles.user : ''}`}>
               <div className={`${styles.bubble} ${styles[msg.role]}`}>
                 {msg.role === 'assistant' && msg.graphEntities && msg.graphEntities.length > 0 && (
-                  <div className={styles.entities}>图谱：{msg.graphEntities.join(' · ')}</div>
+                  <div className={styles.entities}>
+                    <span className={styles.entitiesLabel}>图谱命中：</span>
+                    {msg.graphEntities.map((e, ei) => (
+                      <button
+                        key={ei}
+                        className={styles.entityTag}
+                        onClick={() => setEntityModal(e)}
+                        title={`查看「${e}」的关系图`}
+                      >{e}</button>
+                    ))}
+                  </div>
                 )}
                 {msg.role === 'assistant' ? (
                   <>
@@ -175,13 +198,41 @@ export default function ChatInterface({ session, onSessionUpdate }: Props) {
                       onCite={(n) => scrollToSource(n, i)}
                       raw={rawMsgIds.has(i)}
                     />
-                    <button
-                      className={styles.rawToggle}
-                      onClick={() => toggleRaw(i)}
-                      title={rawMsgIds.has(i) ? '切换为渲染视图' : '切换为原始文本'}
-                    >
-                      {rawMsgIds.has(i) ? '渲染' : '原文'}
-                    </button>
+                    <div className={styles.bubbleActions}>
+                      {msg.graphPaths && msg.graphPaths.length > 0 && (
+                        <button
+                          className={styles.rawToggle}
+                          onClick={() => togglePaths(i)}
+                        >
+                          {expandedPaths.has(i) ? '▲ 收起图谱路径' : `▼ 图谱路径 (${msg.graphPaths.length})`}
+                        </button>
+                      )}
+                      <button
+                        className={styles.rawToggle}
+                        onClick={() => toggleRaw(i)}
+                      >
+                        {rawMsgIds.has(i) ? '渲染' : '原文'}
+                      </button>
+                    </div>
+                    {msg.graphPaths && expandedPaths.has(i) && (
+                      <div className={styles.graphPaths}>
+                        {msg.graphPaths.map((p, pi) => (
+                          <div key={pi} className={styles.graphPath}>
+                            {p.entities.map((ent, ei) => (
+                              <span key={ei}>
+                                <button
+                                  className={styles.pathEntity}
+                                  onClick={() => setEntityModal(ent)}
+                                >{ent}</button>
+                                {ei < p.relations.length && (
+                                  <span className={styles.pathRelation}> —{p.relations[ei]}→ </span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </>
                 ) : msg.content}
                 {msg.role === 'assistant' && msg.sources && msg.sources.length > 0 && (
@@ -189,6 +240,7 @@ export default function ChatInterface({ session, onSessionUpdate }: Props) {
                     sources={msg.sources}
                     msgIdx={i}
                     panelRefs={sourcePanelRefs.current}
+                    graphChunkIds={msg.graphChunkIds}
                   />
                 )}
               </div>
@@ -209,7 +261,12 @@ export default function ChatInterface({ session, onSessionUpdate }: Props) {
                 {answer && (
                   <>
                     {graphEntities.length > 0 && (
-                      <div className={styles.entities}>图谱：{graphEntities.join(' · ')}</div>
+                      <div className={styles.entities}>
+                        <span className={styles.entitiesLabel}>图谱命中：</span>
+                        {graphEntities.map((e, ei) => (
+                          <span key={ei} className={styles.entityTagStatic}>{e}</span>
+                        ))}
+                      </div>
                     )}
                     <MarkdownWithCitations content={answer} onCite={() => {}} raw={false} />
                   </>
@@ -221,6 +278,10 @@ export default function ChatInterface({ session, onSessionUpdate }: Props) {
           {error && <div className={styles.error}>{error}</div>}
           <div ref={bottomRef} />
         </div>
+      )}
+
+      {entityModal && (
+        <GraphEntityModal entity={entityModal} onClose={() => setEntityModal(null)} />
       )}
 
       <div className={styles.inputArea}>

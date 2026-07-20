@@ -48,10 +48,72 @@
   box-shadow: var(--shadow-sm);
 }
 .entities {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.entitiesLabel {
   font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.entityTag {
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
   color: var(--accent);
-  margin-bottom: 6px;
-  opacity: 0.85;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 1px 8px;
+  transition: background 0.1s, opacity 0.1s;
+}
+.entityTag:hover { opacity: 0.8; }
+.entityTagStatic {
+  background: var(--accent-subtle);
+  border-radius: 10px;
+  color: var(--accent);
+  font-size: 11px;
+  padding: 1px 8px;
+}
+.bubbleActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.graphPaths {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(0,0,0,0.12);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.graphPath {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+.pathEntity {
+  background: var(--accent-subtle);
+  border: none;
+  border-radius: 4px;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 0 5px;
+  transition: opacity 0.1s;
+}
+.pathEntity:hover { opacity: 0.75; }
+.pathRelation {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
 }
 .thinking {
   display: flex;

@@ -11,7 +11,15 @@
   background: var(--accent-subtle); color: var(--accent);
   border-radius: 3px; padding: 1px 5px; font-size: 10px; flex-shrink: 0;
 }
-.filename { flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.graphBadge {
+  background: rgba(99,102,241,0.18);
+  color: var(--accent);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
 .page { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
 .score { font-size: 10px; color: var(--accent); flex-shrink: 0; margin-left: auto; }
 .excerpt {

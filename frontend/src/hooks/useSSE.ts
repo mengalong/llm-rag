@@ -1,21 +1,24 @@
 import { useRef, useState } from 'react'
 import { type Source } from '../api/client'
+import { type GraphPath } from '../api/sessions'
 
 interface SSEState {
   answer: string
   sources: Source[]
   graphEntities: string[]
+  graphPaths: GraphPath[]
   loading: boolean
   error: string | null
 }
 
-type DoneCallback = (answer: string, sources: Source[], entities: string[]) => void
+type DoneCallback = (answer: string, sources: Source[], entities: string[], paths: GraphPath[], graphChunkIds: string[]) => void
 
 export function useSSEQuery() {
   const [state, setState] = useState<SSEState>({
     answer: '',
     sources: [],
     graphEntities: [],
+    graphPaths: [],
     loading: false,
     error: null,
   })
@@ -26,7 +29,7 @@ export function useSSEQuery() {
     if (esRef.current) esRef.current.close()
     answerRef.current = ''
 
-    setState({ answer: '', sources: [], graphEntities: [], loading: true, error: null })
+    setState({ answer: '', sources: [], graphEntities: [], graphPaths: [], loading: true, error: null })
     console.log('[SSE] asking:', question)
 
     const params = new URLSearchParams({ question, use_graph: String(useGraph) })
@@ -41,12 +44,12 @@ export function useSSEQuery() {
         if (data.done) {
           const finalSources = data.sources ?? []
           const finalEntities = data.graph_entities ?? []
+          const finalPaths = data.graph_paths ?? []
+          const finalGraphChunkIds = data.graph_chunk_ids ?? []
           console.log('[SSE] done, sources:', finalSources.length)
           es.close()
-          // Write the persisted message first, then clear streaming state in the
-          // same synchronous call so React batches them into one render — no flash.
-          onDone?.(answerRef.current, finalSources, finalEntities)
-          setState({ answer: '', sources: [], graphEntities: [], loading: false, error: null })
+          onDone?.(answerRef.current, finalSources, finalEntities, finalPaths, finalGraphChunkIds)
+          setState({ answer: '', sources: [], graphEntities: [], graphPaths: [], loading: false, error: null })
         } else if (data.token) {
           answerRef.current += data.token
           setState((prev) => ({ ...prev, answer: prev.answer + data.token }))

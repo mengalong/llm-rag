@@ -1,8 +1,15 @@
+export interface GraphPath {
+  entities: string[]
+  relations: string[]
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   sources?: import('./client').Source[]
   graphEntities?: string[]
+  graphPaths?: GraphPath[]
+  graphChunkIds?: string[]
 }
 
 export interface ChatSession {
