@@ -42,11 +42,11 @@ export function useSSEQuery() {
           const finalSources = data.sources ?? []
           const finalEntities = data.graph_entities ?? []
           console.log('[SSE] done, sources:', finalSources.length)
-          // Clear the streaming state before calling onDone so the streaming
-          // bubble disappears once the persisted message is rendered.
-          setState({ answer: '', sources: [], graphEntities: [], loading: false, error: null })
-          onDone?.(answerRef.current, finalSources, finalEntities)
           es.close()
+          // Write the persisted message first, then clear streaming state in the
+          // same synchronous call so React batches them into one render — no flash.
+          onDone?.(answerRef.current, finalSources, finalEntities)
+          setState({ answer: '', sources: [], graphEntities: [], loading: false, error: null })
         } else if (data.token) {
           answerRef.current += data.token
           setState((prev) => ({ ...prev, answer: prev.answer + data.token }))

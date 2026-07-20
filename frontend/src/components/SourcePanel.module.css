@@ -8,7 +8,7 @@
 }
 .header:hover { background: rgba(255,255,255,0.04); }
 .index {
-  background: rgba(16,163,127,0.2); color: var(--accent);
+  background: var(--accent-subtle); color: var(--accent);
   border-radius: 3px; padding: 1px 5px; font-size: 10px; flex-shrink: 0;
 }
 .filename { flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
