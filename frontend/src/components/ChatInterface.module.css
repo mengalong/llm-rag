@@ -33,23 +33,25 @@
   border-radius: 12px;
   font-size: 14px;
   line-height: 1.7;
-  white-space: pre-wrap;
   word-break: break-word;
 }
 .bubble.user {
   background: var(--accent);
   color: #fff;
   border-bottom-right-radius: 4px;
+  box-shadow: 0 2px 6px rgba(99,102,241,0.35);
 }
 .bubble.assistant {
   background: var(--surface);
   color: var(--text);
   border-bottom-left-radius: 4px;
+  box-shadow: var(--shadow-sm);
 }
 .entities {
   font-size: 11px;
   color: var(--accent);
   margin-bottom: 6px;
+  opacity: 0.85;
 }
 .thinking {
   display: flex;
@@ -149,3 +151,99 @@
 }
 .stopBtn:hover { background: var(--surface-hover); color: var(--danger); }
 .error { font-size: 12px; color: var(--danger); padding: 4px 0; }
+.mdContent {
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: break-word;
+  min-width: 0;
+}
+/* reset paragraph spacing — ReactMarkdown wraps every block in <p> */
+.mdContent > p,
+.mdContent > * > p { margin: 0 0 0.5em; }
+.mdContent > p:last-child,
+.mdContent > *:last-child > p:last-child { margin-bottom: 0; }
+.mdContent h1, .mdContent h2, .mdContent h3,
+.mdContent h4, .mdContent h5, .mdContent h6 {
+  margin: 0.9em 0 0.35em;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.mdContent h1:first-child, .mdContent h2:first-child, .mdContent h3:first-child { margin-top: 0.2em; }
+.mdContent h1 { font-size: 1.2em; }
+.mdContent h2 { font-size: 1.08em; }
+.mdContent h3 { font-size: 1em; }
+/* tighter list spacing — no extra gaps between items */
+.mdContent ul, .mdContent ol { margin: 0.3em 0 0.5em 1.5em; padding: 0; }
+.mdContent li { margin-bottom: 0; line-height: 1.65; }
+.mdContent li > p { margin: 0; display: inline; }
+.mdContent li + li { margin-top: 0.1em; }
+/* indent content under headings */
+.mdContent h1 + *, .mdContent h2 + *, .mdContent h3 + *,
+.mdContent h1 + ul, .mdContent h2 + ul, .mdContent h3 + ul,
+.mdContent h1 + ol, .mdContent h2 + ol, .mdContent h3 + ol {
+  padding-left: 0.75em;
+}
+.mdContent code {
+  background: rgba(0,0,0,0.18);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.87em;
+  font-family: 'Menlo', 'Consolas', monospace;
+}
+.mdContent pre {
+  background: rgba(0,0,0,0.22);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+.mdContent pre code { background: none; padding: 0; font-size: 0.85em; }
+.mdContent blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 0.4em 0;
+  padding: 0 0 0 10px;
+  color: var(--text-muted);
+}
+.mdContent table { border-collapse: collapse; width: 100%; margin: 0.5em 0; font-size: 13px; }
+.mdContent th, .mdContent td { border: 1px solid var(--border); padding: 5px 10px; text-align: left; }
+.mdContent th { background: var(--surface-hover); font-weight: 600; }
+.mdContent a { color: var(--accent); text-decoration: underline; }
+.mdContent hr { border: none; border-top: 1px solid var(--border); margin: 0.6em 0; }
+
+.rawContent {
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Menlo', 'Consolas', monospace;
+  color: var(--text-muted);
+}
+
+.rawToggle {
+  display: inline-block;
+  margin-top: 6px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 2px 7px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.rawToggle:hover { background: var(--surface-hover); color: var(--text); }
+
+.citation {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.75em;
+  font-weight: 600;
+  padding: 0 1px;
+  border-radius: 3px;
+  transition: background 0.1s;
+}
+.citation:hover {
+  background: var(--accent-subtle);
+  text-decoration: underline;
+}
+

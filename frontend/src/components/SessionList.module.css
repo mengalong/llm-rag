@@ -32,7 +32,13 @@
   user-select: none;
 }
 .item:hover { background: var(--surface); color: var(--text); }
-.item.active { background: var(--surface); color: var(--text); font-weight: 500; }
+.item.active {
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 500;
+  border-left: 2px solid var(--accent);
+  padding-left: 8px;
+}
 .title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .del {
   background: none; border: none; color: transparent;

@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react'
-import FileUpload from './components/FileUpload'
 import ChatInterface from './components/ChatInterface'
 import GraphViewer from './components/GraphViewer'
 import SessionList from './components/SessionList'
@@ -115,15 +114,8 @@ export default function App() {
           <button className={activeTab === 'docs' ? 'tab active' : 'tab'} onClick={() => setActiveTab('docs')}>文件管理</button>
           <button className={activeTab === 'graph' ? 'tab active' : 'tab'} onClick={() => setActiveTab('graph')}>知识图谱</button>
 
-          {activeTab === 'chat' && (
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <FileUpload
-                onUpload={(f) => { upload(f); setActiveTab('docs') }}
-                uploading={uploading}
-                progress={uploadProgress}
-              />
-              {docError && <span style={{ fontSize: 12, color: 'var(--danger)' }}>{docError}</span>}
-            </div>
+          {docError && activeTab !== 'docs' && (
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--danger)' }}>{docError}</span>
           )}
         </div>
 

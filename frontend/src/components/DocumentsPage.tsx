@@ -132,6 +132,7 @@ export default function DocumentsPage({ docs, uploading, uploadProgress, onUploa
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
           onClick={() => !uploading && inputRef.current?.click()}
+          title="支持 PDF、DOCX、TXT、Markdown（.md）"
         >
           <input ref={inputRef} type="file" multiple accept=".pdf,.docx,.doc,.txt,.md,.markdown"
             style={{ display: 'none' }} onChange={(e) => handleFiles(e.target.files)} />
@@ -142,6 +143,7 @@ export default function DocumentsPage({ docs, uploading, uploadProgress, onUploa
               </div>
             : <span>＋ 上传文档</span>}
         </div>
+        <span className={styles.uploadHint}>PDF · DOCX · TXT · MD</span>
       </div>
 
       {/* Strategy panel */}
