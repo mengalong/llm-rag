@@ -102,17 +102,19 @@ async def query_stream(question: str, top_k: int = 5, use_graph: bool = True):
 
     graph_entities: list[str] = []
     graph_paths = []
+    graph_chunk_ids: set[str] = set()
 
     if use_graph:
         entities = _extract_entities_from_question(question)
         if entities:
-            graph_chunk_ids, graph_entities, graph_paths = _get_graph_chunks(entities)
-            if graph_chunk_ids:
-                extra = get_chunks_by_ids(graph_chunk_ids[:10])
+            g_chunk_ids, graph_entities, graph_paths = _get_graph_chunks(entities)
+            if g_chunk_ids:
+                extra = get_chunks_by_ids(g_chunk_ids[:10])
                 existing_ids = {h["chunk_id"] for h in hits}
                 for e in extra:
                     if e["chunk_id"] not in existing_ids:
                         hits.append(e)
+                        graph_chunk_ids.add(e["chunk_id"])
 
     sources = build_sources_from_hits(hits)
     context = _build_context(sources)
@@ -125,6 +127,7 @@ async def query_stream(question: str, top_k: int = 5, use_graph: bool = True):
             "sources": [s.model_dump() for s in sources],
             "graph_entities": graph_entities,
             "graph_paths": [p.model_dump() for p in graph_paths],
+            "graph_chunk_ids": list(graph_chunk_ids),
         })
         yield f"data: {done_data}\n\n"
 

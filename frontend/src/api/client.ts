@@ -113,6 +113,33 @@ export const getDocument = (id: string) => api.get<Document>(`/documents/${id}`)
 export const getDocumentChunks = (id: string) =>
   api.get<{ chunks: ChunkItem[]; total: number }>(`/documents/${id}/chunks`)
 export const deleteDocument = (id: string) => api.delete(`/documents/${id}`)
+export interface EntityTypeStat {
+  type: string
+  label: string
+  count: number
+  color: string
+}
+
+export interface RelationStat {
+  relation: string
+  count: number
+}
+
+export interface GraphOverview {
+  node_count: number
+  edge_count: number
+  document_count: number
+  semantic_edge_count: number
+  cooccur_edge_count: number
+  top_entities: string[]
+  entity_type_stats: EntityTypeStat[]
+  top_relations: RelationStat[]
+}
+
 export const getGraph = () => api.get<GraphData>('/graph/')
 export const getSubgraph = (entity: string, depth = 2) =>
   api.get<GraphData>('/graph/subgraph', { params: { entity, depth } })
+export const getGraphByDocument = (docId: string) =>
+  api.get<GraphData>(`/graph/document/${docId}`)
+export const getGraphOverview = () =>
+  api.get<GraphOverview>('/graph/overview')

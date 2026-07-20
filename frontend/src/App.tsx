@@ -4,7 +4,7 @@ import GraphViewer from './components/GraphViewer'
 import SessionList from './components/SessionList'
 import DocumentsPage from './components/DocumentsPage'
 import { useDocuments } from './hooks/useDocuments'
-import { getGraph, getSubgraph, type GraphData, type ChunkSettings } from './api/client'
+import { type ChunkSettings } from './api/client'
 import {
   loadSessions, saveSessions, createSession,
   loadActiveSessionId, saveActiveSessionId,
@@ -91,24 +91,7 @@ export default function App() {
     }
   }, [sessions, activeSessionId, persistSessions, handleSessionSelect])
 
-  // Graph
-  const [fullGraphData, setFullGraphData] = useState<GraphData | null>(null)
-  const [graphData, setGraphData] = useState<GraphData | null>(null)
-
   useEffect(() => { refresh() }, [])
-
-  useEffect(() => {
-    if (activeTab === 'graph') {
-      getGraph().then((r) => { setFullGraphData(r.data); setGraphData(r.data) }).catch(console.error)
-    }
-  }, [activeTab])
-
-  const handleNodeClick = async (_nodeId: string, label: string) => {
-    try {
-      const res = await getSubgraph(label, 2)
-      setGraphData(res.data)
-    } catch { /* node not in graph */ }
-  }
 
   const showSessionSidebar = activeTab === 'chat'
 
@@ -170,12 +153,7 @@ export default function App() {
             />
           )}
           {activeTab === 'graph' && (
-            <GraphViewer
-              data={graphData}
-              fullData={fullGraphData}
-              onNodeClick={handleNodeClick}
-              onReset={() => setGraphData(fullGraphData)}
-            />
+            <GraphViewer docs={docs} />
           )}
         </div>
       </main>
