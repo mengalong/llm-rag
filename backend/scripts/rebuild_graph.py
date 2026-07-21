@@ -5,7 +5,8 @@ Usage:
     conda run -n llm-rag python -m scripts.rebuild_graph [--no-llm]
 
 Options:
-    --no-llm    Skip LLM relation extraction (NER only, much faster)
+    --no-llm    Force ner_llm strategy and skip LLM relation extraction
+                (overrides graph_config.yaml for this run only)
 """
 import asyncio
 import json
@@ -18,12 +19,24 @@ logger = logging.getLogger("rebuild_graph")
 
 
 async def main(skip_llm: bool = False):
-    # Import after path is set up
     from app.config import settings
     from app.db.file_store import FileStore
     from app.core.graph_store import get_graph, save_graph
-    from app.core.graph_builder import extract_and_add_entities, extract_relations_with_llm
+    from app.core.graph_builders import get_graph_builder
     from app.models.document import Chunk, ChunkMetadata
+
+    # --no-llm: temporarily force ner_llm strategy without LLM extraction
+    if skip_llm:
+        import app.core.graph_config as _gc
+        _orig_strategy = _gc._config_cache  # will be refreshed from file anyway
+        # Monkey-patch for this run only
+        from app.core.graph_builders.ner_llm import NerLlmBuilder
+        class _NerOnlyBuilder(NerLlmBuilder):
+            async def build(self, chunks):
+                self._extract_entities(chunks)  # skip _extract_relations
+        builder_factory = lambda: _NerOnlyBuilder()
+    else:
+        builder_factory = get_graph_builder
 
     # Clear the existing graph
     import networkx as nx
@@ -65,14 +78,18 @@ async def main(skip_llm: bool = False):
             ))
 
         logger.info("Processing %s: %d chunks", doc.filename, len(chunks))
-        extract_and_add_entities(chunks)
-
-        if not skip_llm:
-            await extract_relations_with_llm(chunks)
+        builder = builder_factory()
+        await builder.build(chunks)
 
     g = get_graph()
     logger.info("Rebuild complete — nodes: %d, edges: %d", g.number_of_nodes(), g.number_of_edges())
     save_graph()
+
+    # Save a snapshot after successful rebuild
+    from app.core.graph_store import save_snapshot
+    doc_names = [d.filename for d in indexed]
+    version = save_snapshot(skip_llm=skip_llm, documents=doc_names)
+    logger.info("Snapshot saved: %s", version)
 
 
 if __name__ == "__main__":

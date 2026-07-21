@@ -68,13 +68,11 @@ async def _index_document(
 
         await _set_progress(store, doc_id, 70, "构建知识图谱...", chunk_count=len(chunks))
 
-        from ...core.graph_builder import extract_and_add_entities, extract_relations_with_llm
-        extract_and_add_entities(chunks)
-        logger.info("[%s] NER entities extracted", doc_id[:8])
-
-        await _set_progress(store, doc_id, 85, "LLM 关系抽取...", chunk_count=len(chunks))
-        await extract_relations_with_llm(chunks)
-        logger.info("[%s] LLM relation extraction done", doc_id[:8])
+        from ...core.graph_builders import get_graph_builder
+        builder = get_graph_builder()
+        await _set_progress(store, doc_id, 75, f"图谱策略: {builder.__class__.__name__}...", chunk_count=len(chunks))
+        await builder.build(chunks)
+        logger.info("[%s] graph build done (%s)", doc_id[:8], builder.__class__.__name__)
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         await store.update_status(doc_id, "indexed", chunk_count=len(chunks),

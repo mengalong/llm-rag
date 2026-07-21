@@ -1,0 +1,187 @@
+# 知识图谱过滤与检索配置
+# 修改后无需重启后端，下次请求时自动重新加载
+
+extraction:
+  # 图谱构建策略：ner_llm | llm_only | lightrag | graphrag
+  # - ner_llm:  spaCy NER 提实体 + LLM 提关系（当前默认，生产可用）
+  # - llm_only: LLM 一次性提实体+关系（开发中，设置后会报 NotImplementedError）
+  # - lightrag: LightRAG 框架（预留接口，需安装 lightrag-hku）
+  # - graphrag:  Microsoft GraphRAG（预留接口，需安装 graphrag）
+  strategy: ner_llm
+
+  # spaCy NER 模型名称（仅 ner_llm 策略使用）
+  # zh_core_web_sm:  轻量，速度快，准确率一般（默认）
+  # zh_core_web_trf: BERT-based，准确率高，速度慢 3-5 倍
+  # 换模型前需先下载：conda run -n llm-rag python -m spacy download zh_core_web_trf
+  ner_model: zh_core_web_trf
+
+  # 图谱 LLM 专用 base_url（留空则复用 .env 中的 LLM_BASE_URL）
+  graph_llm_base_url: ""
+
+  # llm_only 策略参数（strategy=llm_only 时生效）
+  llm_only:
+    batch_size: 3     # 每批合并几个 chunk 一起送 LLM（减少 API 调用次数）
+    concurrency: 3    # 并发请求数
+
+entity_filter:
+  # spaCy NER 实体类型白名单，不在列表中的类型（CARDINAL/DATE/TIME 等）会被过滤
+  valid_types:
+    - PERSON
+    - ORG
+    - GPE
+    - PRODUCT
+    - LOC
+    - WORK_OF_ART
+    - EVENT
+    - FAC
+    - NORP
+
+  # 实体文本最小长度（字符数），过短的实体直接丢弃
+  min_length: 2
+
+  # 纯英文实体的最小长度（英文变量名如 id/type/view 容易被误识别）
+  min_english_length: 6
+
+  # 编程领域停用词黑名单（英文，小写匹配）
+  programming_stopwords:
+    - id
+    - type
+    - name
+    - text
+    - view
+    - data
+    - item
+    - list
+    - node
+    - path
+    - url
+    - key
+    - val
+    - str
+    - int
+    - bool
+    - true
+    - false
+    - null
+    - none
+    - self
+    - this
+    - args
+    - get
+    - set
+    - add
+    - run
+    - use
+    - new
+    - old
+    - log
+    - api
+    - app
+
+llm_entity_filter:
+  # 过滤 dot-notation 链式调用（MultiWindowManager.closeLeftSidebar）
+  skip_dot_notation: true
+
+  # 过滤 camelCase 标识符（LoggerManager、SQLiteManager）
+  skip_camel_case: true
+
+  # 实体最大字符数，超长文本（如枚举列表）跳过整个实体
+  max_length: 40
+
+  # 纯英文实体的最小长度（复用 entity_filter 的设置，可单独覆盖）
+  min_english_length: 6
+
+  # 枚举分隔符：含这些字符且超过阈值长度时自动拆分为多个实体
+  enum_separators:
+    - "、"
+    - "，"
+    - "；"
+  enum_split_min_length: 10   # 文本超过此长度且含分隔符时才拆分
+
+retrieval:
+  # 关键词检索返回的最大实体数量
+  fuzzy_max_results: 5
+
+  # 图谱检索时每个实体最多扩展的邻居节点数
+  graph_neighbor_limit: 5
+
+  # 图谱扩展召回的最大 chunk 数量
+  graph_chunk_limit: 10
+
+  # 中文停用词（用于关键词检索时过滤无意义词）
+  stop_words:
+    - 的
+    - 了
+    - 在
+    - 是
+    - 我
+    - 有
+    - 和
+    - 就
+    - 不
+    - 人
+    - 都
+    - 一
+    - 一个
+    - 上
+    - 也
+    - 很
+    - 到
+    - 说
+    - 要
+    - 去
+    - 你
+    - 会
+    - 着
+    - 没有
+    - 看
+    - 好
+    - 自己
+    - 这
+    - 那
+    - 里
+    - 来
+    - 下
+    - 什么
+    - 怎么
+    - 哪些
+    - 如何
+    - 为什么
+    - 可以
+    - 能
+    - 吗
+    - 呢
+    - 啊
+    - 吧
+    - 过
+    - 把
+    - 被
+    - 让
+    - 给
+    - 从
+    - 向
+    - 跟
+    - 与
+    - 及
+    - 或
+    - 而
+    - 但
+    - 虽然
+    - 因为
+    - 所以
+    - 如果
+    - 虽
+    - 但是
+    - 然后
+    - 之后
+    - 之前
+    - 当
+    - 请
+    - 告诉
+    - 介绍
+    - 描述
+    - 说明
+    - 列出
+    - 总结
+    - 分析
+    - 比较
