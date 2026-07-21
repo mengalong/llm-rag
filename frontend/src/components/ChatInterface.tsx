@@ -10,6 +10,7 @@ import styles from './ChatInterface.module.css'
 interface Props {
   session: ChatSession
   onSessionUpdate: (s: ChatSession) => void
+  onSessionTitleUpdate: (id: string, title: string) => void
 }
 
 /** Normalize model output before feeding to ReactMarkdown:
@@ -76,7 +77,7 @@ function MarkdownWithCitations({ content, onCite, raw }: MarkdownWithCitationsPr
   )
 }
 
-export default function ChatInterface({ session, onSessionUpdate }: Props) {
+export default function ChatInterface({ session, onSessionUpdate, onSessionTitleUpdate }: Props) {
   const [input, setInput] = useState('')
   const [useGraph, setUseGraph] = useState(true)
   const [rawMsgIds, setRawMsgIds] = useState<Set<number>>(new Set())
@@ -147,12 +148,14 @@ export default function ChatInterface({ session, onSessionUpdate }: Props) {
       }
       const withAssistant = { ...updated, messages: [...updated.messages, assistantMsg] }
 
-      // Auto-generate title from first Q&A
+      // Write messages immediately — no waiting for title
+      onSessionUpdate(withAssistant)
+
+      // Generate title in background, update only title field (no messages re-render)
       if (isFirstMessage) {
-        const title = await generateSessionTitle(q, finalAnswer)
-        onSessionUpdate({ ...withAssistant, title })
-      } else {
-        onSessionUpdate(withAssistant)
+        generateSessionTitle(q, finalAnswer).then((title) => {
+          onSessionTitleUpdate(session.id, title)
+        })
       }
     })
   }

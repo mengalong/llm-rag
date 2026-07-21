@@ -11,6 +11,12 @@ const TYPE_LABEL: Record<string, string> = {
   PERSON: '人物', ORG: '组织', GPE: '地点', PRODUCT: '产品', LOC: '位置', ENTITY: '实体',
 }
 
+const SIZES = [
+  { label: '标准', w: 'calc(100vw - 48px)', h: 'calc(100vh - 48px)', fullscreen: false },
+  { label: '全屏', w: '100vw', h: '100vh', fullscreen: true },
+  { label: '小窗', w: '680px', h: '520px', fullscreen: false },
+]
+
 interface Props {
   entity: string
   onClose: () => void
@@ -24,6 +30,7 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
   const [data, setData] = useState<GraphData | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [sizeIdx, setSizeIdx] = useState(0)
 
   const loadEntity = useCallback((label: string) => {
     setLoading(true)
@@ -53,9 +60,17 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
 
   useEffect(() => {
     if (!containerRef.current || !data || data.nodes.length === 0) return
+
+    // Find the focal node — prefer exact label match, fall back to first node
+    const focalId = data.nodes.find(n => n.label === currentEntity)?.id ?? data.nodes[0]?.id
+
     const elements = [
       ...data.nodes.map((n) => ({
-        data: { id: n.id, label: n.label, type: n.type, color: TYPE_COLOR[n.type] ?? TYPE_COLOR.ENTITY },
+        data: {
+          id: n.id, label: n.label, type: n.type,
+          color: TYPE_COLOR[n.type] ?? TYPE_COLOR.ENTITY,
+          isTarget: n.id === focalId ? 1 : 0,
+        },
       })),
       ...data.edges.map((e) => ({
         data: { id: e.id, source: e.source, target: e.target, label: e.relation },
@@ -80,10 +95,25 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
             'text-valign': 'center',
             'text-outline-width': 2,
             'text-outline-color': 'data(color)',
-            width: 42, height: 42,
+            width: 40, height: 40,
             'border-width': 0,
             cursor: 'pointer',
           },
+        },
+        {
+          selector: 'node[isTarget = 1]',
+          style: {
+            width: 62, height: 62,
+            'background-color': '#dc2626',
+            'text-outline-color': '#dc2626',
+            'border-width': 4,
+            'border-color': '#ffffff',
+            'border-opacity': 1,
+            'font-size': 14,
+            'font-weight': '700',
+            'text-outline-width': 3,
+            'z-compound-depth': 'top',
+          } as any,
         },
         {
           selector: 'edge',
@@ -106,10 +136,6 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
           },
         },
         {
-          selector: `node[label = "${currentEntity}"]`,
-          style: { 'border-width': 3, 'border-color': '#fff', 'border-opacity': 0.9 },
-        },
-        {
           selector: 'node:hover',
           style: { 'border-width': 2, 'border-color': '#fff', 'border-opacity': 0.6 },
         },
@@ -127,9 +153,7 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
 
     cy.on('tap', 'node', (evt) => {
       const label: string = evt.target.data('label')
-      if (label && label !== currentEntity) {
-        navigateTo(label)
-      }
+      if (label && label !== currentEntity) navigateTo(label)
     })
 
     cyRef.current = cy
@@ -146,10 +170,18 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
   }, [onClose, goBack, history.length])
 
   const usedTypes = [...new Set((data?.nodes ?? []).map((n) => n.type))]
+  const sz = SIZES[sizeIdx]
 
   return (
-    <div className={styles.backdrop} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+    <div
+      className={`${styles.backdrop} ${sz.fullscreen ? styles.backdropFullscreen : ''}`}
+      onClick={onClose}
+    >
+      <div
+        className={`${styles.modal} ${sz.fullscreen ? styles.modalFullscreen : ''}`}
+        style={sz.fullscreen ? undefined : { width: sz.w, height: sz.h } as React.CSSProperties}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
           {history.length > 0 && (
             <button className={styles.backBtn} onClick={goBack} title="返回上一个实体 (←)">
@@ -157,9 +189,16 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
             </button>
           )}
           <span className={styles.title}>「{currentEntity}」关系图</span>
-          {data && (
-            <span className={styles.stats}>节点 {data.nodes.length} · 边 {data.edges.length}</span>
-          )}
+          {data && <span className={styles.stats}>节点 {data.nodes.length} · 边 {data.edges.length}</span>}
+          <div className={styles.resizeBtns}>
+            {SIZES.map((s, i) => (
+              <button
+                key={s.label}
+                className={`${styles.resizeBtn} ${sizeIdx === i ? styles.resizeBtnActive : ''}`}
+                onClick={() => setSizeIdx(i)}
+              >{s.label}</button>
+            ))}
+          </div>
           <button className={styles.closeBtn} onClick={onClose} title="关闭 (ESC)">✕</button>
         </div>
 

@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import cytoscape, { type Core } from 'cytoscape'
-import { type GraphData, type GraphNode, type GraphOverview, type Document, getSubgraph, getGraphByDocument, getGraphOverview } from '../api/client'
+import {
+  type GraphData, type GraphNode, type GraphOverview, type GraphSearchResult,
+  type GraphEntityCategories, type EntityCategoryStats, type EntityDetail, type EntityTypePageResult, type Document,
+  getSubgraph, getGraphByDocument, getGraphOverview, getGraphEntityCategories, getEntitiesByType, searchGraphEntities
+} from '../api/client'
+import GraphEntityModal from './GraphEntityModal'
 import styles from './GraphViewer.module.css'
 
 interface Props {
@@ -123,13 +128,34 @@ export default function GraphViewer({ docs }: Props) {
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
   const [docGraphData, setDocGraphData] = useState<GraphData | null>(null)
   const [subgraphData, setSubgraphData] = useState<GraphData | null>(null)
+  const [subgraphError, setSubgraphError] = useState<string | null>(null)
+  const [modalEntity, setModalEntity] = useState<string | null>(null)
   const [filterType, setFilterType] = useState<string>('ALL')
   const [loading, setLoading] = useState(false)
   const [overview, setOverview] = useState<GraphOverview | null>(null)
+  const [categories, setCategories] = useState<GraphEntityCategories | null>(null)
+  const [showCategories, setShowCategories] = useState(false)
+  const [expandedType, setExpandedType] = useState<string | null>(null)
+  const [typeDetail, setTypeDetail] = useState<EntityTypePageResult | null>(null)
+  const [typeDetailLoading, setTypeDetailLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResult, setSearchResult] = useState<GraphSearchResult | null>(null)
+  const [searching, setSearching] = useState(false)
 
   useEffect(() => {
     getGraphOverview().then((r) => setOverview(r.data)).catch(console.error)
+    getGraphEntityCategories().then((r) => setCategories(r.data)).catch(console.error)
   }, [])
+
+  const runSearch = () => {
+    const q = searchQuery.trim()
+    if (!q) return
+    setSearching(true)
+    searchGraphEntities(q)
+      .then((r) => setSearchResult(r.data))
+      .catch(console.error)
+      .finally(() => setSearching(false))
+  }
 
   useEffect(() => {
     setSubgraphData(null)
@@ -141,11 +167,45 @@ export default function GraphViewer({ docs }: Props) {
       .finally(() => setLoading(false))
   }, [selectedDocId])
 
-  const handleEntityClick = async (label: string) => {
+  // Opening modal doesn't clear categories panel state
+  const handleEntityClick = (label: string) => {
+    setModalEntity(label)
+  }
+
+  const handleTypeExpand = async (typeKey: string) => {
+    if (expandedType === typeKey) {
+      setExpandedType(null)
+      setTypeDetail(null)
+      return
+    }
+    setExpandedType(typeKey)
+    setTypeDetailLoading(true)
+    setTypeDetail(null)
     try {
-      const res = await getSubgraph(label, 2)
-      setSubgraphData(res.data)
-    } catch { /* entity not in graph */ }
+      const res = await getEntitiesByType(typeKey, 1, 50)
+      setTypeDetail(res.data)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setTypeDetailLoading(false)
+    }
+  }
+
+  const loadMoreTypeDetail = async () => {
+    if (!typeDetail || !expandedType) return
+    const nextPage = typeDetail.page + 1
+    setTypeDetailLoading(true)
+    try {
+      const res = await getEntitiesByType(expandedType, nextPage, 50)
+      setTypeDetail(prev => prev ? {
+        ...res.data,
+        items: [...prev.items, ...res.data.items]
+      } : res.data)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setTypeDetailLoading(false)
+    }
   }
 
   const indexedDocs = docs.filter((d) => d.status === 'indexed')
@@ -177,6 +237,54 @@ export default function GraphViewer({ docs }: Props) {
     <div className={styles.wrapper}>
       {/* Left panel — docs + entity list only */}
       <div className={styles.panel}>
+        {/* Search */}
+        <div className={styles.searchSection}>
+          <div className={styles.searchBox}>
+            <input
+              className={styles.searchInput}
+              placeholder="搜索实体关键词..."
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); if (!e.target.value) setSearchResult(null) }}
+              onKeyDown={e => e.key === 'Enter' && runSearch()}
+            />
+            <button className={styles.searchBtn} onClick={runSearch} disabled={searching || !searchQuery.trim()}>
+              {searching ? '…' : '查询'}
+            </button>
+          </div>
+          {searchResult && (
+            <div className={styles.searchResults}>
+              {searchResult.ner_entities.length > 0 && (
+                <div className={styles.searchGroup}>
+                  <div className={styles.searchGroupLabel}>NER 实体</div>
+                  {searchResult.ner_entities.map(e => (
+                    <div key={e} className={styles.searchResultItem} onClick={() => handleEntityClick(e)}>
+                      <span className={styles.searchResultLabel}>{e}</span>
+                      <span className={styles.searchResultTag} style={{ color: 'var(--accent)' }}>spaCy</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchResult.fuzzy_matches.length > 0 && (
+                <div className={styles.searchGroup}>
+                  <div className={styles.searchGroupLabel}>关键词匹配</div>
+                  {searchResult.fuzzy_matches.map((m, i) => (
+                    <div key={i} className={styles.searchResultItem} onClick={() => handleEntityClick(m.label)}>
+                      <div className={styles.searchResultMain}>
+                        <span className={styles.searchResultLabel}>{m.label}</span>
+                        <span className={styles.searchResultTag} style={{ color: '#f59e0b' }}>关键词</span>
+                      </div>
+                      <div className={styles.searchResultHint}>关键词「{m.matched_by}」→ {m.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchResult.ner_entities.length === 0 && searchResult.fuzzy_matches.length === 0 && (
+                <div className={styles.searchEmpty}>未找到匹配实体</div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className={styles.panelSection}>
           <div className={styles.panelLabel}>文档</div>
           {indexedDocs.length === 0 && (
@@ -288,13 +396,106 @@ export default function GraphViewer({ docs }: Props) {
                     {r.relation} <span className={styles.overviewRelCount}>{r.count}</span>
                   </span>
                 ))}
+                {categories && (
+                  <button
+                    className={`${styles.categoriesToggleBtn} ${showCategories ? styles.categoriesToggleBtnActive : ''}`}
+                    onClick={() => setShowCategories(v => !v)}
+                  >
+                    实体分类
+                  </button>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {!selectedDocId && (
-          <div className={styles.empty}>← 选择左侧文档查看实体图谱</div>
+        {/* Entity categories panel — shown alongside content, not blocking it */}
+        {categories && showCategories && (
+          <div className={styles.categoriesPanel}>
+            <div className={styles.categoriesHeader}>
+              <span className={styles.categoriesTitle}>实体来源分类</span>
+              <button className={styles.categoriesClose} onClick={() => { setShowCategories(false); setExpandedType(null); setTypeDetail(null) }}>✕</button>
+            </div>
+            <div className={styles.categoriesBody}>
+              {[
+                { badge: 'NER', badgeColor: 'rgba(99,102,241,0.15)', badgeText: 'var(--accent)', title: 'spaCy 命名实体识别', total: categories.ner_total, nodes: categories.ner_nodes },
+                { badge: 'LLM', badgeColor: 'rgba(148,163,184,0.15)', badgeText: '#94a3b8', title: '大模型关系抽取实体', total: categories.llm_total, nodes: categories.llm_nodes },
+              ].map(({ badge, badgeColor, badgeText, title, total, nodes }) => (
+                <div key={badge} className={styles.categoryGroup}>
+                  <div className={styles.categoryGroupHeader}>
+                    <span className={styles.categoryGroupBadge} style={{ background: badgeColor, color: badgeText }}>{badge}</span>
+                    <span className={styles.categoryGroupTitle}>{title}</span>
+                    <span className={styles.categoryGroupCount}>{total} 个</span>
+                  </div>
+                  {nodes.map((cat) => {
+                    const typeKey = badge === 'LLM' ? 'LLM' : cat.type
+                    const isExpanded = expandedType === typeKey
+                    return (
+                      <div key={cat.type}>
+                        <div
+                          className={`${styles.categoryRow} ${isExpanded ? styles.categoryRowActive : ''}`}
+                          onClick={() => handleTypeExpand(typeKey)}
+                        >
+                          <div className={styles.categoryDot} style={{ background: cat.color }} />
+                          <span className={styles.categoryLabel}>{cat.label}</span>
+                          <span className={styles.categoryType}>{cat.type}</span>
+                          <span className={styles.categoryCount}>{cat.count}</span>
+                          <span className={styles.categoryExpandIcon}>{isExpanded ? '▲' : '▼'}</span>
+                        </div>
+                        {isExpanded && (
+                          <div className={styles.categoryDetail}>
+                            {typeDetailLoading && typeDetail === null && (
+                              <div className={styles.categoryDetailLoading}>加载中...</div>
+                            )}
+                            {typeDetail && (
+                              <>
+                                <div className={styles.entityTable}>
+                                  <div className={styles.entityTableHeader}>
+                                    <span className={styles.entityTableCol}>实体名称</span>
+                                    <span className={styles.entityTableColDeg}>度数</span>
+                                    <span className={styles.entityTableColDoc}>来源文档</span>
+                                  </div>
+                                  {typeDetail.items.map((item) => (
+                                    <div key={item.label} className={styles.entityTableRow} onClick={() => handleEntityClick(item.label)}>
+                                      <span className={styles.entityTableName}>{item.label}</span>
+                                      <span className={styles.entityTableDeg}>{item.degree}</span>
+                                      <span className={styles.entityTableDoc}>
+                                        {item.document_names.map((n, i) => (
+                                          <span key={i} className={styles.entityTableDocTag} title={n}>{n}</span>
+                                        ))}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                                {typeDetail.items.length < typeDetail.total && (
+                                  <div className={styles.categoryLoadMore}>
+                                    <span className={styles.categoryLoadMoreHint}>
+                                      已显示 {typeDetail.items.length} / {typeDetail.total}
+                                    </span>
+                                    <button
+                                      className={styles.categoryLoadMoreBtn}
+                                      onClick={(e) => { e.stopPropagation(); loadMoreTypeDetail() }}
+                                      disabled={typeDetailLoading}
+                                    >
+                                      {typeDetailLoading ? '加载中...' : '加载更多'}
+                                    </button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!selectedDocId && !showCategories && (
+          <div className={styles.empty}>搜索实体后点击结果，或选择左侧文档查看实体图谱</div>
         )}
         {selectedDocId && loading && (
           <div className={styles.empty}>加载中...</div>
@@ -302,21 +503,25 @@ export default function GraphViewer({ docs }: Props) {
         {selectedDocId && !loading && docGraphData?.nodes.length === 0 && (
           <div className={styles.empty}>该文档暂无图谱数据</div>
         )}
-        {selectedDocId && !loading && subgraphData && (
+        {selectedDocId && !loading && !subgraphData && docGraphData && docGraphData.nodes.length > 0 && !showCategories && (
+          <div className={styles.empty}>← 点击左侧实体展开关系图</div>
+        )}
+        {selectedDocId && !loading && subgraphData && !showCategories && (
           <>
             <div className={styles.subgraphHeader}>
               <span className={styles.subgraphTitle}>
-                「{subgraphData.nodes.find(n => subgraphData.edges.some(e => e.source === n.id || e.target === n.id))?.label ?? subgraphData.nodes[0]?.label ?? ''}」关系图
+                「{subgraphData.nodes[0]?.label ?? ''}」周边关系
               </span>
-              <button className={styles.resetBtn} onClick={() => setSubgraphData(null)}>← 返回实体列表</button>
+              <button className={styles.resetBtn} onClick={() => setSubgraphData(null)}>← 返回</button>
             </div>
             <GraphCanvas data={subgraphData} onNodeClick={handleEntityClick} />
           </>
         )}
-        {selectedDocId && !loading && !subgraphData && docGraphData && docGraphData.nodes.length > 0 && (
-          <div className={styles.empty}>← 点击左侧实体展开关系图</div>
-        )}
       </div>
+
+      {modalEntity && (
+        <GraphEntityModal entity={modalEntity} onClose={() => setModalEntity(null)} />
+      )}
     </div>
   )
 }
