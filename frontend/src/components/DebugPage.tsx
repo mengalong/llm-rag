@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { type DebugResult, type DebugHit, type MatchedGraphNode, debugQuery } from '../api/client'
+import { type DebugResult, type DebugHit, type MatchedGraphNode, debugQueryStream } from '../api/client'
 import styles from './DebugPage.module.css'
 
 const TYPE_COLOR: Record<string, string> = {
@@ -64,23 +64,61 @@ export default function DebugPage() {
   const [question, setQuestion] = useState('')
   const [topK, setTopK] = useState(5)
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<DebugResult | null>(null)
+  const [retrieval, setRetrieval] = useState<Omit<DebugResult, 'answer_with_graph' | 'answer_without_graph'> | null>(null)
+  const [answerWith, setAnswerWith] = useState('')
+  const [answerWithout, setAnswerWithout] = useState('')
+  const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const esRef = useRef<EventSource | null>(null)
 
-  const run = async () => {
+  const run = () => {
     if (!question.trim()) return
+    if (esRef.current) esRef.current.close()
+
     setLoading(true)
     setError(null)
-    setResult(null)
-    try {
-      const r = await debugQuery(question.trim(), topK)
-      setResult(r.data)
-    } catch (e: any) {
-      setError(e?.message ?? '请求失败')
-    } finally {
+    setRetrieval(null)
+    setAnswerWith('')
+    setAnswerWithout('')
+    setDone(false)
+
+    const url = debugQueryStream(question.trim(), topK)
+    const es = new EventSource(url)
+    esRef.current = es
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'retrieval') {
+          setRetrieval({
+            question: question.trim(),
+            ner_entities: data.ner_entities,
+            fuzzy_entities: data.fuzzy_entities,
+            matched_graph_nodes: data.matched_graph_nodes,
+            graph_paths: data.graph_paths,
+            vector_hits: data.vector_hits,
+            graph_hits: data.graph_hits,
+            final_hits: [...data.vector_hits, ...data.graph_hits],
+          })
+          setLoading(false)
+        } else if (data.type === 'token') {
+          if (data.label === 'with_graph') setAnswerWith(prev => prev + data.token)
+          else setAnswerWithout(prev => prev + data.token)
+        } else if (data.type === 'done') {
+          setDone(true)
+          es.close()
+        }
+      } catch { /* parse error */ }
+    }
+
+    es.onerror = () => {
+      setError('连接错误，请检查后端服务')
       setLoading(false)
+      es.close()
     }
   }
+
+  useEffect(() => () => { esRef.current?.close() }, [])
 
   return (
     <div className={styles.page}>
@@ -110,7 +148,11 @@ export default function DebugPage() {
         {error && <div className={styles.error}>{error}</div>}
       </div>
 
-      {result && (
+      {loading && !retrieval && (
+        <div className={styles.placeholder}>检索中...</div>
+      )}
+
+      {retrieval && (
         <div className={styles.body}>
           {/* Top: retrieval process */}
           <div className={styles.retrievalRow}>
@@ -120,9 +162,9 @@ export default function DebugPage() {
               <div className={styles.colScroll}>
                 <div className={styles.section}>
                   <div className={styles.sectionTitle}>NER 实体</div>
-                  {result.ner_entities.length === 0
+                  {retrieval.ner_entities.length === 0
                     ? <div className={styles.empty}>未识别到命名实体</div>
-                    : result.ner_entities.map(e => (
+                    : retrieval.ner_entities.map(e => (
                       <span key={e} className={styles.pill} style={{ background: 'rgba(99,102,241,0.15)', color: 'var(--accent)' }}>
                         {e} <span className={styles.pillTag}>spaCy</span>
                       </span>
@@ -130,9 +172,9 @@ export default function DebugPage() {
                 </div>
                 <div className={styles.section}>
                   <div className={styles.sectionTitle}>关键词匹配</div>
-                  {result.fuzzy_entities.length === 0
-                    ? <div className={styles.empty}>{result.ner_entities.length > 0 ? 'NER 已命中' : '无匹配'}</div>
-                    : result.fuzzy_entities.map(e => (
+                  {retrieval.fuzzy_entities.length === 0
+                    ? <div className={styles.empty}>{retrieval.ner_entities.length > 0 ? 'NER 已命中' : '无匹配'}</div>
+                    : retrieval.fuzzy_entities.map(e => (
                       <span key={e} className={styles.pill} style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>
                         {e} <span className={styles.pillTag}>关键词</span>
                       </span>
@@ -141,16 +183,16 @@ export default function DebugPage() {
                 <div className={styles.section}>
                   <div className={styles.sectionTitle}>
                     命中节点
-                    <span className={styles.count}>{result.matched_graph_nodes.filter(n => n.match_reason !== 'graph_neighbor').length}命中+{result.matched_graph_nodes.filter(n => n.match_reason === 'graph_neighbor').length}邻居</span>
+                    <span className={styles.count}>{retrieval.matched_graph_nodes.filter(n => n.match_reason !== 'graph_neighbor').length}命中+{retrieval.matched_graph_nodes.filter(n => n.match_reason === 'graph_neighbor').length}邻居</span>
                   </div>
-                  {result.matched_graph_nodes.length === 0
+                  {retrieval.matched_graph_nodes.length === 0
                     ? <div className={styles.empty}>无命中</div>
-                    : result.matched_graph_nodes.map((n, i) => <NodeRow key={i} node={n} />)}
+                    : retrieval.matched_graph_nodes.map((n, i) => <NodeRow key={i} node={n} />)}
                 </div>
-                {result.graph_paths.length > 0 && (
+                {retrieval.graph_paths.length > 0 && (
                   <div className={styles.section}>
-                    <div className={styles.sectionTitle}>扩展路径 <span className={styles.count}>{result.graph_paths.length}</span></div>
-                    {result.graph_paths.slice(0, 6).map((p, i) => (
+                    <div className={styles.sectionTitle}>扩展路径 <span className={styles.count}>{retrieval.graph_paths.length}</span></div>
+                    {retrieval.graph_paths.slice(0, 6).map((p, i) => (
                       <div key={i} className={styles.pathRow}>
                         <span className={styles.pathEntity}>{p.entities[0]}</span>
                         <span className={styles.pathRel}> —{p.relations[0]}→ </span>
@@ -164,49 +206,55 @@ export default function DebugPage() {
 
             {/* Vector hits */}
             <div className={styles.retrievalCol}>
-              <div className={styles.colHeader}>向量召回 <span className={styles.count}>{result.vector_hits.length}</span></div>
+              <div className={styles.colHeader}>向量召回 <span className={styles.count}>{retrieval.vector_hits.length}</span></div>
               <div className={styles.colScroll}>
-                {result.vector_hits.map(h => <HitCard key={h.chunk_id} hit={h} />)}
+                {retrieval.vector_hits.map(h => <HitCard key={h.chunk_id} hit={h} />)}
               </div>
             </div>
 
             {/* Graph hits */}
             <div className={styles.retrievalCol}>
-              <div className={styles.colHeader}>图谱扩展召回 <span className={styles.count}>{result.graph_hits.length}</span></div>
+              <div className={styles.colHeader}>图谱扩展召回 <span className={styles.count}>{retrieval.graph_hits.length}</span></div>
               <div className={styles.colScroll}>
-                {result.graph_hits.length === 0
-                  ? <div className={styles.emptyCol}>无额外图谱召回{result.matched_graph_nodes.length === 0 ? '（未命中图谱节点）' : '（已在向量结果中）'}</div>
-                  : result.graph_hits.map(h => <HitCard key={h.chunk_id} hit={h} />)}
+                {retrieval.graph_hits.length === 0
+                  ? <div className={styles.emptyCol}>无额外图谱召回{retrieval.matched_graph_nodes.length === 0 ? '（未命中图谱节点）' : '（已在向量结果中）'}</div>
+                  : retrieval.graph_hits.map(h => <HitCard key={h.chunk_id} hit={h} />)}
               </div>
             </div>
           </div>
 
-          {/* Bottom: answer comparison */}
+          {/* Bottom: answer comparison — stream in */}
           <div className={styles.answerRow}>
             <div className={styles.answerCol}>
               <div className={styles.answerHeader}>
                 <span className={styles.answerLabel}>开启图谱增强</span>
-                <span className={styles.answerMeta}>{result.vector_hits.length + result.graph_hits.length} 个来源</span>
+                <span className={styles.answerMeta}>{retrieval.vector_hits.length + retrieval.graph_hits.length} 个来源</span>
+                {!answerWith && !done && <span className={styles.answerStreaming}>输出中...</span>}
               </div>
               <div className={styles.answerContent}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.answer_with_graph}</ReactMarkdown>
+                {answerWith
+                  ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{answerWith}</ReactMarkdown>
+                  : <div className={styles.answerPlaceholder}>等待回答...</div>}
               </div>
             </div>
             <div className={styles.answerDivider} />
             <div className={styles.answerCol}>
               <div className={styles.answerHeader}>
                 <span className={styles.answerLabel}>不开启图谱增强</span>
-                <span className={styles.answerMeta}>{result.vector_hits.length} 个来源</span>
+                <span className={styles.answerMeta}>{retrieval.vector_hits.length} 个来源</span>
+                {!answerWithout && !done && <span className={styles.answerStreaming}>输出中...</span>}
               </div>
               <div className={styles.answerContent}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.answer_without_graph}</ReactMarkdown>
+                {answerWithout
+                  ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{answerWithout}</ReactMarkdown>
+                  : <div className={styles.answerPlaceholder}>等待回答...</div>}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {!result && !loading && (
+      {!retrieval && !loading && (
         <div className={styles.placeholder}>
           输入问题后点击「分析」，查看检索过程详情并对比图谱增强效果
         </div>

@@ -217,5 +217,8 @@ export const getEntitiesByType = (type: string, page: number, pageSize = 50) =>
   api.get<EntityTypePageResult>(`/graph/entity-type/${type}`, { params: { page, page_size: pageSize } })
 export const searchGraphEntities = (keyword: string) =>
   api.get<GraphSearchResult>('/graph/search', { params: { q: keyword } })
+export const debugQueryStream = (question: string, topK: number) =>
+  `/api/v1/query/debug/stream?question=${encodeURIComponent(question)}&top_k=${topK}`
+
 export const debugQuery = (question: string, topK: number) =>
   api.post<DebugResult>('/query/debug', { question, top_k: topK })

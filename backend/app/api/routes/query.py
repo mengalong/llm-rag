@@ -145,8 +145,135 @@ class DebugRequest(BaseModel):
     top_k: int = 5
 
 
-@router.post("/debug", response_model=DebugResult)
-async def debug_query(req: DebugRequest):
+@router.get("/debug/stream")
+async def debug_query_stream(question: str, top_k: int = 5):
+    """SSE stream for debug: emits retrieval info first, then two LLM answers concurrently."""
+    from ...core.embedder import get_embedder
+    from ...core.vector_store import search
+    from ...core.rag_engine import build_sources_from_hits
+    from ...core.graph_store import get_graph
+    from ...core.graph_builder import _node_id
+
+    def _hit_to_debug(h: dict, source: str) -> DebugHit:
+        meta = h["metadata"]
+        return DebugHit(
+            chunk_id=h["chunk_id"],
+            filename=meta.get("filename", ""),
+            page=meta.get("page") or None,
+            chunk_index=meta.get("chunk_index", 0),
+            score=round(h["score"], 4),
+            source=source,
+            heading=meta.get("heading") or None,
+            excerpt=h["content"][:300],
+        )
+
+    async def event_stream():
+        # Step 1: vector search + graph retrieval (fast, emit immediately)
+        embedder = get_embedder()
+        q_emb = embedder.embed_one(question)
+        vector_hits_raw = search(q_emb, top_k=top_k)
+        vector_hits = [_hit_to_debug(h, "vector") for h in vector_hits_raw]
+
+        ner_entities, fuzzy_entities, fuzzy_kw_map, graph_entity_labels, graph_paths, _, graph_extra = \
+            _do_graph_retrieval(question, vector_hits_raw, top_k)
+        graph_hits = [_hit_to_debug(h, "graph") for h in graph_extra]
+
+        g = get_graph()
+        all_entities = list(dict.fromkeys(ner_entities + fuzzy_entities))
+        matched_nodes: list[MatchedGraphNode] = []
+        seen_nids: set[str] = set()
+        for ent in all_entities:
+            nid = _node_id(ent)
+            if not g.has_node(nid):
+                for node_id, data in g.nodes(data=True):
+                    if ent.lower() in data.get("label", "").lower():
+                        nid = node_id
+                        break
+                else:
+                    continue
+            if nid not in seen_nids:
+                seen_nids.add(nid)
+                reason = "ner" if ent in ner_entities else "fuzzy"
+                node_label = g.nodes[nid].get("label", ent)
+                if reason == "fuzzy":
+                    kw = fuzzy_kw_map.get(ent, ent)
+                    matched_by = f"{kw} → {node_label}" if kw != node_label else kw
+                else:
+                    matched_by = ent
+                matched_nodes.append(MatchedGraphNode(
+                    label=node_label,
+                    type=g.nodes[nid].get("type", "ENTITY"),
+                    degree=g.degree(nid),
+                    match_reason=reason,
+                    matched_by=matched_by,
+                ))
+            for nb in list(g.neighbors(nid))[:5]:
+                if nb not in seen_nids:
+                    seen_nids.add(nb)
+                    matched_nodes.append(MatchedGraphNode(
+                        label=g.nodes[nb].get("label", nb),
+                        type=g.nodes[nb].get("type", "ENTITY"),
+                        degree=g.degree(nb),
+                        match_reason="graph_neighbor",
+                        matched_by="",
+                    ))
+
+        # Emit retrieval info immediately
+        retrieval_event = json.dumps({
+            "type": "retrieval",
+            "ner_entities": ner_entities,
+            "fuzzy_entities": fuzzy_entities,
+            "matched_graph_nodes": [n.model_dump() for n in matched_nodes],
+            "graph_paths": [p.model_dump() for p in graph_paths],
+            "vector_hits": [h.model_dump() for h in vector_hits],
+            "graph_hits": [h.model_dump() for h in graph_hits],
+        })
+        yield f"data: {retrieval_event}\n\n"
+
+        # Step 2: stream both LLM answers concurrently via asyncio queues
+        hits_with = vector_hits_raw + graph_extra
+        hits_without = vector_hits_raw
+        sources_with = build_sources_from_hits(hits_with)
+        sources_without = build_sources_from_hits(hits_without)
+        ctx_with = _build_context(sources_with)
+        ctx_without = _build_context(sources_without)
+
+        import asyncio
+        queue_with: asyncio.Queue = asyncio.Queue()
+        queue_without: asyncio.Queue = asyncio.Queue()
+
+        async def stream_to_queue(ctx: str, q: asyncio.Queue, label: str):
+            async for token in _stream_llm(question, ctx):
+                await q.put({"label": label, "token": token})
+            await q.put({"label": label, "done": True})
+
+        asyncio.create_task(stream_to_queue(ctx_with, queue_with, "with_graph"))
+        asyncio.create_task(stream_to_queue(ctx_without, queue_without, "without_graph"))
+
+        done_with = False
+        done_without = False
+        while not (done_with and done_without):
+            # drain both queues each iteration
+            for q, flag_attr in [(queue_with, "done_with"), (queue_without, "done_without")]:
+                try:
+                    item = q.get_nowait()
+                    if item.get("done"):
+                        if flag_attr == "done_with":
+                            done_with = True
+                        else:
+                            done_without = True
+                    else:
+                        yield f"data: {json.dumps({'type': 'token', 'label': item['label'], 'token': item['token']})}\n\n"
+                except asyncio.QueueEmpty:
+                    pass
+            if not (done_with and done_without):
+                await asyncio.sleep(0.01)
+
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
     from ...core.embedder import get_embedder
     from ...core.vector_store import search
     from ...core.rag_engine import build_sources_from_hits
