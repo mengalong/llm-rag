@@ -2,8 +2,10 @@ import { useEffect, useRef, useState, useMemo } from 'react'
 import cytoscape, { type Core } from 'cytoscape'
 import {
   type GraphData, type GraphNode, type GraphOverview, type GraphSearchResult,
-  type GraphEntityCategories, type EntityCategoryStats, type EntityDetail, type EntityTypePageResult, type Document,
-  getSubgraph, getGraphByDocument, getGraphOverview, getGraphEntityCategories, getEntitiesByType, searchGraphEntities
+  type GraphEntityCategories, type EntityCategoryStats, type EntityDetail, type EntityTypePageResult,
+  type GraphSnapshot, type GraphDiff, type GraphDiffNode, type Document,
+  getSubgraph, getGraphByDocument, getGraphOverview, getGraphEntityCategories, getEntitiesByType,
+  getGraphSnapshots, deleteGraphSnapshot, getGraphDiff, searchGraphEntities
 } from '../api/client'
 import GraphEntityModal from './GraphEntityModal'
 import styles from './GraphViewer.module.css'
@@ -134,7 +136,7 @@ export default function GraphViewer({ docs }: Props) {
   const [loading, setLoading] = useState(false)
   const [overview, setOverview] = useState<GraphOverview | null>(null)
   const [categories, setCategories] = useState<GraphEntityCategories | null>(null)
-  const [showCategories, setShowCategories] = useState(false)
+  const [showCategories, setShowCategories] = useState(true)
   const [expandedType, setExpandedType] = useState<string | null>(null)
   const [typeDetail, setTypeDetail] = useState<EntityTypePageResult | null>(null)
   const [typeDetailLoading, setTypeDetailLoading] = useState(false)
@@ -142,9 +144,19 @@ export default function GraphViewer({ docs }: Props) {
   const [searchResult, setSearchResult] = useState<GraphSearchResult | null>(null)
   const [searching, setSearching] = useState(false)
 
+  // Snapshot & diff state
+  const [snapshots, setSnapshots] = useState<GraphSnapshot[]>([])
+  const [snapshotsOpen, setSnapshotsOpen] = useState(false)
+  const [diffV1, setDiffV1] = useState<string | null>(null)
+  const [diffV2, setDiffV2] = useState<string | null>(null)
+  const [diffResult, setDiffResult] = useState<GraphDiff | null>(null)
+  const [diffLoading, setDiffLoading] = useState(false)
+  const [diffSearch, setDiffSearch] = useState('')
+
   useEffect(() => {
     getGraphOverview().then((r) => setOverview(r.data)).catch(console.error)
     getGraphEntityCategories().then((r) => setCategories(r.data)).catch(console.error)
+    getGraphSnapshots().then((r) => setSnapshots(r.data)).catch(console.error)
   }, [])
 
   const runSearch = () => {
@@ -170,6 +182,35 @@ export default function GraphViewer({ docs }: Props) {
   // Opening modal doesn't clear categories panel state
   const handleEntityClick = (label: string) => {
     setModalEntity(label)
+  }
+
+  const toggleDiffVersion = (v: string) => {
+    if (diffV1 === v) { setDiffV1(null); return }
+    if (diffV2 === v) { setDiffV2(null); return }
+    if (!diffV1) { setDiffV1(v); return }
+    if (!diffV2) { setDiffV2(v); return }
+    // both already set: replace older selection
+    setDiffV1(diffV2); setDiffV2(v)
+  }
+
+  const runDiff = async () => {
+    if (!diffV1 || !diffV2) return
+    setDiffLoading(true)
+    setDiffResult(null)
+    try {
+      const r = await getGraphDiff(diffV1, diffV2)
+      setDiffResult(r.data)
+    } catch (e) { console.error(e) }
+    finally { setDiffLoading(false) }
+  }
+
+  const handleDeleteSnapshot = async (version: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    await deleteGraphSnapshot(version).catch(console.error)
+    setSnapshots(prev => prev.filter(s => s.version !== version))
+    if (diffV1 === version) setDiffV1(null)
+    if (diffV2 === version) setDiffV2(null)
+    if (diffResult?.v1 === version || diffResult?.v2 === version) setDiffResult(null)
   }
 
   const handleTypeExpand = async (typeKey: string) => {
@@ -233,10 +274,63 @@ export default function GraphViewer({ docs }: Props) {
     [docGraphData]
   )
 
+  const filteredDiffNodes = useMemo(() => {
+    if (!diffResult) return { added: [] as GraphDiffNode[], removed: [] as GraphDiffNode[] }
+    const q = diffSearch.toLowerCase()
+    return {
+      added: diffResult.added_nodes.filter(n => !q || n.label.toLowerCase().includes(q)),
+      removed: diffResult.removed_nodes.filter(n => !q || n.label.toLowerCase().includes(q)),
+    }
+  }, [diffResult, diffSearch])
+
   return (
     <div className={styles.wrapper}>
       {/* Left panel — docs + entity list only */}
       <div className={styles.panel}>
+        {/* Version snapshots */}
+        {snapshots.length > 0 && (
+          <div className={styles.snapshotSection}>
+            <div className={styles.snapshotHeader} onClick={() => setSnapshotsOpen(v => !v)}>
+              <span className={styles.snapshotTitle}>版本快照 <span className={styles.panelCount}>{snapshots.length}</span></span>
+              <span className={styles.snapshotToggle}>{snapshotsOpen ? '▲' : '▼'}</span>
+            </div>
+            {snapshotsOpen && (
+              <div className={styles.snapshotList}>
+                {snapshots.map(s => {
+                  const isV1 = diffV1 === s.version
+                  const isV2 = diffV2 === s.version
+                  const ts = new Date(s.timestamp).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                  return (
+                    <div
+                      key={s.version}
+                      className={`${styles.snapshotItem} ${isV1 ? styles.snapshotItemV1 : ''} ${isV2 ? styles.snapshotItemV2 : ''}`}
+                      onClick={() => toggleDiffVersion(s.version)}
+                      title={`${s.skip_llm ? 'NER only' : s.llm_model ?? 'unknown model'}`}
+                    >
+                      <span className={styles.snapshotVer}>{s.version}</span>
+                      <span className={styles.snapshotTs}>{ts}</span>
+                      <span className={styles.snapshotNodes}>{s.node_count.toLocaleString()}节点</span>
+                      {(isV1 || isV2) && (
+                        <span className={`${styles.snapshotBadge} ${isV1 ? styles.snapshotBadgeV1 : styles.snapshotBadgeV2}`}>
+                          {isV1 ? 'A' : 'B'}
+                        </span>
+                      )}
+                      <button className={styles.snapshotDel} onClick={(e) => handleDeleteSnapshot(s.version, e)} title="删除">×</button>
+                    </div>
+                  )
+                })}
+                <button
+                  className={styles.snapshotDiffBtn}
+                  disabled={!diffV1 || !diffV2 || diffLoading}
+                  onClick={runDiff}
+                >
+                  {diffLoading ? '对比中...' : diffV1 && diffV2 ? `对比 ${diffV1} → ${diffV2}` : '选择两个版本后对比'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Search */}
         <div className={styles.searchSection}>
           <div className={styles.searchBox}>
@@ -396,25 +490,17 @@ export default function GraphViewer({ docs }: Props) {
                     {r.relation} <span className={styles.overviewRelCount}>{r.count}</span>
                   </span>
                 ))}
-                {categories && (
-                  <button
-                    className={`${styles.categoriesToggleBtn} ${showCategories ? styles.categoriesToggleBtnActive : ''}`}
-                    onClick={() => setShowCategories(v => !v)}
-                  >
-                    实体分类
-                  </button>
-                )}
               </div>
             )}
           </div>
         )}
 
-        {/* Entity categories panel — shown alongside content, not blocking it */}
+        {/* Entity categories panel — always visible by default */}
         {categories && showCategories && (
           <div className={styles.categoriesPanel}>
             <div className={styles.categoriesHeader}>
               <span className={styles.categoriesTitle}>实体来源分类</span>
-              <button className={styles.categoriesClose} onClick={() => { setShowCategories(false); setExpandedType(null); setTypeDetail(null) }}>✕</button>
+              <button className={styles.categoriesClose} onClick={() => setShowCategories(false)} title="收起">✕</button>
             </div>
             <div className={styles.categoriesBody}>
               {[
@@ -494,7 +580,7 @@ export default function GraphViewer({ docs }: Props) {
           </div>
         )}
 
-        {!selectedDocId && !showCategories && (
+        {!selectedDocId && !showCategories && !diffResult && (
           <div className={styles.empty}>搜索实体后点击结果，或选择左侧文档查看实体图谱</div>
         )}
         {selectedDocId && loading && (
@@ -516,6 +602,56 @@ export default function GraphViewer({ docs }: Props) {
             </div>
             <GraphCanvas data={subgraphData} onNodeClick={handleEntityClick} />
           </>
+        )}
+
+        {/* Diff result view */}
+        {diffResult && !showCategories && (
+          <div className={styles.diffPanel}>
+            <div className={styles.diffHeader}>
+              <span className={styles.diffTitle}>{diffResult.v1} → {diffResult.v2} 对比</span>
+              <span className={styles.diffStat}>
+                <span className={styles.diffAdded}>+{diffResult.added_count} 新增</span>
+                <span className={styles.diffRemoved}>-{diffResult.removed_count} 删除</span>
+                <span className={styles.diffUnchanged}>{diffResult.unchanged_count} 不变</span>
+              </span>
+              <input
+                className={styles.diffSearch}
+                placeholder="搜索实体..."
+                value={diffSearch}
+                onChange={e => setDiffSearch(e.target.value)}
+              />
+              <button className={styles.resetBtn} onClick={() => { setDiffResult(null); setDiffSearch('') }}>✕ 关闭</button>
+            </div>
+            <div className={styles.diffBody}>
+              <div className={styles.diffCol}>
+                <div className={styles.diffColHeader}>新增实体 <span className={styles.diffColCount}>{filteredDiffNodes.added.length}</span></div>
+                <div className={styles.diffColScroll}>
+                  {filteredDiffNodes.added.map((n, i) => (
+                    <div key={i} className={`${styles.diffNode} ${styles.diffNodeAdded}`} onClick={() => handleEntityClick(n.label)}>
+                      <div className={styles.nodeTypeDot} style={{ background: TYPE_COLOR[n.type] ?? TYPE_COLOR.ENTITY }} />
+                      <span className={styles.diffNodeLabel}>{n.label}</span>
+                      <span className={styles.diffNodeType}>{n.type}</span>
+                    </div>
+                  ))}
+                  {filteredDiffNodes.added.length === 0 && <div className={styles.empty}>无结果</div>}
+                </div>
+              </div>
+              <div className={styles.diffColDivider} />
+              <div className={styles.diffCol}>
+                <div className={styles.diffColHeader}>删除实体 <span className={styles.diffColCount}>{filteredDiffNodes.removed.length}</span></div>
+                <div className={styles.diffColScroll}>
+                  {filteredDiffNodes.removed.map((n, i) => (
+                    <div key={i} className={`${styles.diffNode} ${styles.diffNodeRemoved}`}>
+                      <div className={styles.nodeTypeDot} style={{ background: TYPE_COLOR[n.type] ?? TYPE_COLOR.ENTITY }} />
+                      <span className={styles.diffNodeLabel}>{n.label}</span>
+                      <span className={styles.diffNodeType}>{n.type}</span>
+                    </div>
+                  ))}
+                  {filteredDiffNodes.removed.length === 0 && <div className={styles.empty}>无结果</div>}
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 

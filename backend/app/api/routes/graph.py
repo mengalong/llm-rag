@@ -2,7 +2,10 @@ from fastapi import APIRouter, HTTPException, Query
 import json
 from collections import Counter
 
-from ...core.graph_store import get_graph, to_graph_data, get_subgraph, get_subgraph_by_document
+from ...core.graph_store import (
+    get_graph, to_graph_data, get_subgraph, get_subgraph_by_document,
+    list_snapshots, load_snapshot_meta, diff_snapshots, delete_snapshot,
+)
 from ...models.graph import GraphData, GraphStats, GraphOverview, EntityTypeStat, RelationStat, GraphEntityCategories, EntityDetail
 
 router = APIRouter()
@@ -191,6 +194,37 @@ async def entities_by_type(
         ))
 
     return {"total": total, "page": page, "page_size": page_size, "items": [i.model_dump() for i in items]}
+
+
+# ── Snapshot endpoints ──────────────────────────────────────────────────────
+
+@router.get("/snapshots")
+async def get_snapshots():
+    return list_snapshots()
+
+
+@router.get("/snapshots/{version}")
+async def get_snapshot(version: str):
+    meta = load_snapshot_meta(version)
+    if meta is None:
+        raise HTTPException(status_code=404, detail=f"Snapshot '{version}' not found")
+    return meta
+
+
+@router.delete("/snapshots/{version}")
+async def remove_snapshot(version: str):
+    ok = delete_snapshot(version)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Snapshot '{version}' not found")
+    return {"deleted": version}
+
+
+@router.get("/diff")
+async def graph_diff(v1: str = Query(...), v2: str = Query(...)):
+    try:
+        return diff_snapshots(v1, v2)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/search")

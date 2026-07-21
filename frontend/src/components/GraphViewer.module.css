@@ -265,6 +265,231 @@
   font-weight: 600;
 }
 
+/* ── Version snapshots ── */
+.snapshotSection {
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.snapshotHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.snapshotHeader:hover { background: var(--surface); }
+
+.snapshotTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.snapshotToggle {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.snapshotList {
+  padding: 4px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.snapshotItem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 11px;
+  transition: background 0.1s, border-color 0.1s;
+  background: var(--surface);
+}
+.snapshotItem:hover { background: var(--surface-hover); }
+.snapshotItemV1 { border-color: var(--accent); background: var(--accent-subtle); }
+.snapshotItemV2 { border-color: #34d399; background: rgba(52,211,153,0.1); }
+
+.snapshotVer { font-weight: 600; color: var(--accent); flex-shrink: 0; }
+.snapshotTs { color: var(--text-muted); flex-shrink: 0; }
+.snapshotNodes { color: var(--text-muted); flex: 1; text-align: right; }
+
+.snapshotBadge {
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 3px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+.snapshotBadgeV1 { background: var(--accent); color: #fff; }
+.snapshotBadgeV2 { background: #34d399; color: #fff; }
+
+.snapshotDel {
+  background: none;
+  border: none;
+  color: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: color 0.1s;
+}
+.snapshotItem:hover .snapshotDel { color: var(--text-muted); }
+.snapshotDel:hover { color: var(--danger) !important; }
+
+.snapshotDiffBtn {
+  margin-top: 4px;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 500;
+  padding: 5px 10px;
+  width: 100%;
+  text-align: center;
+  transition: background 0.1s;
+}
+.snapshotDiffBtn:hover { background: var(--accent-hover); }
+.snapshotDiffBtn:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Diff result panel ── */
+.diffPanel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.diffHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  flex-wrap: wrap;
+}
+
+.diffTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.diffStat {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.diffAdded { color: #34d399; font-weight: 600; }
+.diffRemoved { color: var(--danger); font-weight: 600; }
+.diffUnchanged { color: var(--text-muted); }
+
+.diffSearch {
+  flex: 1;
+  min-width: 120px;
+  padding: 4px 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+.diffSearch:focus { border-color: var(--accent); }
+.diffSearch::placeholder { color: var(--text-muted); }
+
+.diffBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.diffCol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.diffColDivider {
+  width: 1px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.diffColHeader {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--sidebar-bg);
+}
+
+.diffColCount {
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 8px;
+  padding: 1px 6px;
+  color: #fff;
+}
+.diffColHeader:first-of-type .diffColCount { background: #34d399; }
+.diffColHeader + .diffColHeader .diffColCount { background: var(--danger); }
+
+.diffColScroll {
+  flex: 1;
+  overflow-y: auto;
+}
+.diffColScroll::-webkit-scrollbar { width: 3px; }
+.diffColScroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.diffNode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  transition: background 0.1s;
+}
+
+.diffNodeAdded { cursor: pointer; }
+.diffNodeAdded:hover { background: rgba(52,211,153,0.08); }
+.diffNodeRemoved { opacity: 0.75; }
+
+.diffNodeLabel {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diffNodeType { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+
 /* ── Search ── */
 .searchSection {
   border-bottom: 1px solid var(--border);

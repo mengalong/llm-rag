@@ -67,7 +67,8 @@ def _do_graph_retrieval(question: str, hits_raw: list, top_k: int):
         g_chunk_ids, graph_entities, graph_paths = _get_graph_chunks(all_entities)
         if g_chunk_ids:
             existing_ids = {h["chunk_id"] for h in hits_raw}
-            extra = get_chunks_by_ids(g_chunk_ids[:10])
+            from ...core.graph_config import graph_cfg as _gcfg
+            extra = get_chunks_by_ids(g_chunk_ids[:_gcfg.graph_chunk_limit])
             for e in extra:
                 if e["chunk_id"] not in existing_ids:
                     extra_hits.append(e)

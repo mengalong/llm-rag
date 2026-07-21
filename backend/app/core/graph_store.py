@@ -1,6 +1,11 @@
 from __future__ import annotations
 import json
 import os
+import re
+import shutil
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 import networkx as nx
 
@@ -14,6 +19,12 @@ _graph: nx.Graph | None = None
 def _graph_path() -> str:
     os.makedirs(settings.graph_dir, exist_ok=True)
     return os.path.join(settings.graph_dir, "knowledge_graph.graphml")
+
+
+def _snapshots_dir() -> Path:
+    p = Path(settings.graph_dir) / "snapshots"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 def get_graph() -> nx.Graph:
@@ -31,6 +42,153 @@ def save_graph() -> None:
     global _graph
     if _graph is not None:
         nx.write_graphml(_graph, _graph_path())
+
+
+# ── Snapshot helpers ────────────────────────────────────────────────────────
+
+def _next_version() -> str:
+    """Return the next vN version string by scanning existing snapshots."""
+    d = _snapshots_dir()
+    existing = [int(m.group(1)) for f in d.iterdir()
+                if (m := re.match(r'^v(\d+)_', f.name))]
+    return f"v{max(existing) + 1 if existing else 1}"
+
+
+def save_snapshot(
+    *,
+    skip_llm: bool,
+    documents: list[str],
+    note: str = "",
+    ner_model: str = "zh_core_web_sm",
+) -> str:
+    """Copy current graph + write .meta.json. Returns the version string."""
+    g = get_graph()
+    version = _next_version()
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    stem = f"{version}_{ts}"
+    d = _snapshots_dir()
+
+    graphml_src = _graph_path()
+    graphml_dst = d / f"{stem}.graphml"
+    if os.path.exists(graphml_src):
+        shutil.copy2(graphml_src, graphml_dst)
+
+    # count semantic edges
+    semantic = sum(
+        1 for _, _, data in g.edges(data=True)
+        if data.get("relation", "co-occurs") != "co-occurs"
+    )
+
+    meta: dict[str, Any] = {
+        "version": version,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "ner_model": ner_model,
+        "llm_model": settings.effective_graph_llm_model if not skip_llm else None,
+        "llm_base_url": settings.llm_base_url if not skip_llm else None,
+        "skip_llm": skip_llm,
+        "node_count": g.number_of_nodes(),
+        "edge_count": g.number_of_edges(),
+        "semantic_edge_count": semantic,
+        "document_count": len(documents),
+        "documents": documents,
+        "note": note,
+    }
+    with open(d / f"{stem}.meta.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    return version
+
+
+def list_snapshots() -> list[dict[str, Any]]:
+    """Return all snapshot meta objects sorted newest-first."""
+    d = _snapshots_dir()
+    result = []
+    for meta_file in sorted(d.glob("*.meta.json"), reverse=True):
+        with open(meta_file, encoding="utf-8") as f:
+            result.append(json.load(f))
+    return result
+
+
+def load_snapshot_meta(version: str) -> dict[str, Any] | None:
+    d = _snapshots_dir()
+    for meta_file in d.glob(f"{version}_*.meta.json"):
+        with open(meta_file, encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
+def _extract_nodes_from_graphml(path: Path) -> dict[str, str]:
+    """Fast XML parse: returns {label_lower: type} without loading into NetworkX."""
+    import xml.etree.ElementTree as ET
+    if not path.exists():
+        return {}
+    tree = ET.parse(path)
+    root = tree.getroot()
+    ns = root.tag.split("}")[0].lstrip("{") if "}" in root.tag else ""
+    prefix = f"{{{ns}}}" if ns else ""
+
+    # find key ids for label and type
+    label_key = type_key = None
+    for key in root.iter(f"{prefix}key"):
+        if key.attrib.get("attr.name") == "label":
+            label_key = key.attrib.get("id")
+        if key.attrib.get("attr.name") == "type":
+            type_key = key.attrib.get("id")
+
+    nodes: dict[str, str] = {}
+    for node in root.iter(f"{prefix}node"):
+        label = entity_type = ""
+        for data in node.iter(f"{prefix}data"):
+            k = data.attrib.get("key", "")
+            if k == label_key:
+                label = (data.text or "").strip().lower()
+            elif k == type_key:
+                entity_type = (data.text or "").strip()
+        if label:
+            nodes[label] = entity_type
+    return nodes
+
+
+def diff_snapshots(v1: str, v2: str) -> dict[str, Any]:
+    """Compare two snapshot versions. Returns added/removed node lists."""
+    d = _snapshots_dir()
+
+    def _find_graphml(version: str) -> Path | None:
+        for f in d.glob(f"{version}_*.graphml"):
+            return f
+        return None
+
+    p1, p2 = _find_graphml(v1), _find_graphml(v2)
+    if p1 is None or p2 is None:
+        missing = v1 if p1 is None else v2
+        raise FileNotFoundError(f"Snapshot not found: {missing}")
+
+    nodes1 = _extract_nodes_from_graphml(p1)
+    nodes2 = _extract_nodes_from_graphml(p2)
+
+    labels1, labels2 = set(nodes1), set(nodes2)
+    added_labels   = labels2 - labels1
+    removed_labels = labels1 - labels2
+
+    return {
+        "v1": v1,
+        "v2": v2,
+        "added_count": len(added_labels),
+        "removed_count": len(removed_labels),
+        "unchanged_count": len(labels1 & labels2),
+        "added_nodes":   [{"label": l, "type": nodes2[l]} for l in sorted(added_labels)],
+        "removed_nodes": [{"label": l, "type": nodes1[l]} for l in sorted(removed_labels)],
+    }
+
+
+def delete_snapshot(version: str) -> bool:
+    d = _snapshots_dir()
+    deleted = False
+    for f in list(d.glob(f"{version}_*")):
+        f.unlink()
+        deleted = True
+    return deleted
+
 
 
 def to_graph_data(subgraph: nx.Graph | None = None) -> GraphData:

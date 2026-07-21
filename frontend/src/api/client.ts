@@ -204,6 +204,35 @@ export interface EntityTypePageResult {
   items: EntityDetail[]
 }
 
+export interface GraphSnapshot {
+  version: string
+  timestamp: string
+  ner_model: string
+  llm_model: string | null
+  skip_llm: boolean
+  node_count: number
+  edge_count: number
+  semantic_edge_count: number
+  document_count: number
+  documents: string[]
+  note: string
+}
+
+export interface GraphDiffNode {
+  label: string
+  type: string
+}
+
+export interface GraphDiff {
+  v1: string
+  v2: string
+  added_count: number
+  removed_count: number
+  unchanged_count: number
+  added_nodes: GraphDiffNode[]
+  removed_nodes: GraphDiffNode[]
+}
+
 export const getGraph = () => api.get<GraphData>('/graph/')
 export const getSubgraph = (entity: string, depth = 2) =>
   api.get<GraphData>('/graph/subgraph', { params: { entity, depth } })
@@ -215,6 +244,12 @@ export const getGraphEntityCategories = () =>
   api.get<GraphEntityCategories>('/graph/entity-categories')
 export const getEntitiesByType = (type: string, page: number, pageSize = 50) =>
   api.get<EntityTypePageResult>(`/graph/entity-type/${type}`, { params: { page, page_size: pageSize } })
+export const getGraphSnapshots = () =>
+  api.get<GraphSnapshot[]>('/graph/snapshots')
+export const deleteGraphSnapshot = (version: string) =>
+  api.delete(`/graph/snapshots/${version}`)
+export const getGraphDiff = (v1: string, v2: string) =>
+  api.get<GraphDiff>('/graph/diff', { params: { v1, v2 } })
 export const searchGraphEntities = (keyword: string) =>
   api.get<GraphSearchResult>('/graph/search', { params: { q: keyword } })
 export const debugQueryStream = (question: string, topK: number) =>
