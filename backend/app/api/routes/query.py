@@ -2,9 +2,10 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import json
+import asyncio
 
 from ...config import settings
-from ...models.query import QueryRequest, QueryResponse, Source
+from ...models.query import QueryRequest, QueryResponse, Source, DebugResult, DebugHit, MatchedGraphNode
 
 router = APIRouter()
 
@@ -40,16 +41,46 @@ async def generate_title(req: TitleRequest):
         return {"title": short}
 
 
+def _do_graph_retrieval(question: str, hits_raw: list, top_k: int):
+    """Run NER + fuzzy (merged) graph retrieval."""
+    from ...core.vector_store import get_chunks_by_ids
+    from ...core.rag_engine import (
+        _extract_entities_from_question,
+        _fuzzy_match_entities,
+        _get_graph_chunks,
+    )
+
+    ner_entities = _extract_entities_from_question(question)
+    fuzzy_pairs = _fuzzy_match_entities(question)  # list of (label, keyword)
+    fuzzy_entities = [label for label, _ in fuzzy_pairs]
+    fuzzy_kw_map = {label: kw for label, kw in fuzzy_pairs}
+
+    # Merge NER + fuzzy, NER first, no duplicates
+    all_entities = list(dict.fromkeys(ner_entities + fuzzy_entities))
+
+    graph_entities: list[str] = []
+    graph_paths = []
+    graph_chunk_ids: set[str] = set()
+    extra_hits: list[dict] = []
+
+    if all_entities:
+        g_chunk_ids, graph_entities, graph_paths = _get_graph_chunks(all_entities)
+        if g_chunk_ids:
+            existing_ids = {h["chunk_id"] for h in hits_raw}
+            extra = get_chunks_by_ids(g_chunk_ids[:10])
+            for e in extra:
+                if e["chunk_id"] not in existing_ids:
+                    extra_hits.append(e)
+                    graph_chunk_ids.add(e["chunk_id"])
+
+    return ner_entities, fuzzy_entities, fuzzy_kw_map, graph_entities, graph_paths, graph_chunk_ids, extra_hits
+
 
 @router.post("/", response_model=QueryResponse)
 async def query(req: QueryRequest):
     from ...core.embedder import get_embedder
     from ...core.vector_store import search
-    from ...core.rag_engine import (
-        _extract_entities_from_question,
-        _get_graph_chunks,
-        build_sources_from_hits,
-    )
+    from ...core.rag_engine import build_sources_from_hits
 
     embedder = get_embedder()
     q_emb = embedder.embed_one(req.question)
@@ -59,21 +90,8 @@ async def query(req: QueryRequest):
     graph_paths = []
 
     if req.use_graph:
-        entities = _extract_entities_from_question(req.question)
-        if entities:
-            graph_chunk_ids, graph_entities, graph_paths = _get_graph_chunks(entities)
-            if graph_chunk_ids:
-                extra_hits = search(q_emb, top_k=req.top_k, where={"$or": [
-                    {"document_id": {"$ne": ""}}  # fetch all, we filter by chunk_id below
-                ]}) if False else []
-                # Simpler: fetch by chunk IDs directly from ChromaDB
-                from ...core.vector_store import get_chunks_by_ids
-                extra = get_chunks_by_ids(graph_chunk_ids[:10])
-                existing_ids = {h["chunk_id"] for h in hits}
-                for e in extra:
-                    if e["chunk_id"] not in existing_ids:
-                        hits.append(e)
-                        existing_ids.add(e["chunk_id"])
+        _, _, _, graph_entities, graph_paths, _, extra_hits = _do_graph_retrieval(req.question, hits, req.top_k)
+        hits.extend(extra_hits)
 
     sources = build_sources_from_hits(hits)
     context = _build_context(sources)
@@ -89,12 +107,8 @@ async def query(req: QueryRequest):
 @router.get("/stream")
 async def query_stream(question: str, top_k: int = 5, use_graph: bool = True):
     from ...core.embedder import get_embedder
-    from ...core.vector_store import search, get_chunks_by_ids
-    from ...core.rag_engine import (
-        _extract_entities_from_question,
-        _get_graph_chunks,
-        build_sources_from_hits,
-    )
+    from ...core.vector_store import search
+    from ...core.rag_engine import build_sources_from_hits
 
     embedder = get_embedder()
     q_emb = embedder.embed_one(question)
@@ -105,16 +119,8 @@ async def query_stream(question: str, top_k: int = 5, use_graph: bool = True):
     graph_chunk_ids: set[str] = set()
 
     if use_graph:
-        entities = _extract_entities_from_question(question)
-        if entities:
-            g_chunk_ids, graph_entities, graph_paths = _get_graph_chunks(entities)
-            if g_chunk_ids:
-                extra = get_chunks_by_ids(g_chunk_ids[:10])
-                existing_ids = {h["chunk_id"] for h in hits}
-                for e in extra:
-                    if e["chunk_id"] not in existing_ids:
-                        hits.append(e)
-                        graph_chunk_ids.add(e["chunk_id"])
+        _, _, _, graph_entities, graph_paths, graph_chunk_ids, extra_hits = _do_graph_retrieval(question, hits, top_k)
+        hits.extend(extra_hits)
 
     sources = build_sources_from_hits(hits)
     context = _build_context(sources)
@@ -132,6 +138,110 @@ async def query_stream(question: str, top_k: int = 5, use_graph: bool = True):
         yield f"data: {done_data}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+class DebugRequest(BaseModel):
+    question: str
+    top_k: int = 5
+
+
+@router.post("/debug", response_model=DebugResult)
+async def debug_query(req: DebugRequest):
+    from ...core.embedder import get_embedder
+    from ...core.vector_store import search
+    from ...core.rag_engine import build_sources_from_hits
+    from ...core.graph_store import get_graph
+    from ...core.graph_builder import _node_id
+
+    def _hit_to_debug(h: dict, source: str) -> DebugHit:
+        meta = h["metadata"]
+        return DebugHit(
+            chunk_id=h["chunk_id"],
+            filename=meta.get("filename", ""),
+            page=meta.get("page") or None,
+            chunk_index=meta.get("chunk_index", 0),
+            score=round(h["score"], 4),
+            source=source,
+            heading=meta.get("heading") or None,
+            excerpt=h["content"][:300],
+        )
+
+    embedder = get_embedder()
+    q_emb = embedder.embed_one(req.question)
+    vector_hits_raw = search(q_emb, top_k=req.top_k)
+    vector_hits = [_hit_to_debug(h, "vector") for h in vector_hits_raw]
+
+    # Graph retrieval (NER + fuzzy merged)
+    ner_entities, fuzzy_entities, fuzzy_kw_map, graph_entity_labels, graph_paths, _, graph_extra = \
+        _do_graph_retrieval(req.question, vector_hits_raw, req.top_k)
+    graph_hits = [_hit_to_debug(h, "graph") for h in graph_extra]
+
+    # Build matched node details for display
+    g = get_graph()
+    all_entities = list(dict.fromkeys(ner_entities + fuzzy_entities))
+    matched_nodes: list[MatchedGraphNode] = []
+    seen_nids: set[str] = set()
+    for ent in all_entities:
+        nid = _node_id(ent)
+        if not g.has_node(nid):
+            for node_id, data in g.nodes(data=True):
+                if ent.lower() in data.get("label", "").lower():
+                    nid = node_id
+                    break
+            else:
+                continue
+        if nid not in seen_nids:
+            seen_nids.add(nid)
+            reason = "ner" if ent in ner_entities else "fuzzy"
+            node_label = g.nodes[nid].get("label", ent)
+            # For fuzzy: show "keyword → node_label", for NER: show the entity itself
+            if reason == "fuzzy":
+                kw = fuzzy_kw_map.get(ent, ent)
+                matched_by = f"{kw} → {node_label}" if kw != node_label else kw
+            else:
+                matched_by = ent
+            matched_nodes.append(MatchedGraphNode(
+                label=node_label,
+                type=g.nodes[nid].get("type", "ENTITY"),
+                degree=g.degree(nid),
+                match_reason=reason,
+                matched_by=matched_by,
+            ))
+        for nb in list(g.neighbors(nid))[:5]:
+            if nb not in seen_nids:
+                seen_nids.add(nb)
+                matched_nodes.append(MatchedGraphNode(
+                    label=g.nodes[nb].get("label", nb),
+                    type=g.nodes[nb].get("type", "ENTITY"),
+                    degree=g.degree(nb),
+                    match_reason="graph_neighbor",
+                    matched_by="",
+                ))
+
+    # Call LLM twice concurrently: with graph and without graph
+    hits_with_graph = vector_hits_raw + graph_extra
+    hits_without_graph = vector_hits_raw
+
+    sources_with = build_sources_from_hits(hits_with_graph)
+    sources_without = build_sources_from_hits(hits_without_graph)
+
+    answer_with, answer_without = await asyncio.gather(
+        _call_llm(req.question, _build_context(sources_with)),
+        _call_llm(req.question, _build_context(sources_without)),
+    )
+
+    return DebugResult(
+        question=req.question,
+        ner_entities=ner_entities,
+        fuzzy_entities=fuzzy_entities,
+        matched_graph_nodes=matched_nodes,
+        graph_paths=graph_paths,
+        vector_hits=vector_hits,
+        graph_hits=graph_hits,
+        final_hits=vector_hits + graph_hits,
+        answer_with_graph=answer_with,
+        answer_without_graph=answer_without,
+    )
 
 
 def _build_context(sources: list[Source]) -> str:
