@@ -18,6 +18,8 @@ make dev-backend    # cd backend && conda run --no-capture-output -n llm-rag uvi
 make dev-frontend   # cd frontend && npm run dev
 make check          # 检测 LLM + Embedding 可达性
 make reset-db       # 清空 data/（向量/图谱/SQLite）
+make rebuild-graph          # 从已索引文档重建知识图谱（NER + LLM 关系抽取）
+make rebuild-graph no-llm=1 # 仅 NER，跳过 LLM（速度快，适合测试过滤效果）
 cd backend && conda run -n llm-rag pytest tests/ -v
 ```
 
@@ -40,9 +42,9 @@ backend/app/
 │   ├── chunker.py       递归字符切片，_split_text 无递归实现（避免爆栈）
 │   ├── embedder.py      LocalEmbedder（sentence-transformers）/ OllamaEmbedder（httpx）
 │   ├── vector_store.py  ChromaDB 封装，where 必须用 {"$eq": val} 格式
-│   ├── graph_builder.py spaCy zh_core_web_sm NER + Claude 三元组提取（逐 chunk）
+│   ├── graph_builder.py spaCy zh_core_web_sm NER（类型白名单过滤）+ Claude 三元组提取
 │   ├── graph_store.py   NetworkX Graph，GraphML 持久化，to_graph_data() 序列化
-│   ├── rag_engine.py    向量检索 + 图谱 1-hop 扩展，build_sources_from_hits()
+│   ├── rag_engine.py    向量检索 + NER/关键词双路图谱检索 + 1-hop 扩展
 │   └── source_tracer.py chunk-id → doc/page/offset
 ├── processors/
 │   ├── pdf.py           pypdf 按页提取，保留页码
@@ -52,25 +54,27 @@ backend/app/
 │   └── registry.py      .doc 格式抛友好错误，.md 强制 text/markdown
 ├── models/
 │   ├── document.py      Document（含 progress/progress_step/indexed_at/chunk_strategy）
-│   ├── query.py         QueryRequest, QueryResponse, Source, GraphPath
-│   └── graph.py         GraphNode, GraphEdge, GraphData, GraphStats
+│   ├── query.py         QueryRequest, QueryResponse, Source, GraphPath, DebugResult
+│   └── graph.py         GraphNode, GraphEdge, GraphData, GraphStats, GraphOverview, GraphEntityCategories
 └── db/
     └── file_store.py    SQLite via aiosqlite，MIGRATE_STMTS 做字段迁移
 
 frontend/src/
-├── App.tsx              三 Tab 布局（对话/文件管理/知识图谱），Tab 切换时 SessionList ↔ 普通 sidebar
+├── App.tsx              四 Tab 布局（对话/文件管理/知识图谱/检索调试），Tab 切换时 SessionList ↔ 普通 sidebar
 ├── api/
-│   ├── client.ts        axios，Document 接口含 indexed_at/chunk_strategy/progress_step
+│   ├── client.ts        axios，Document/Graph/Debug 接口类型定义
 │   └── sessions.ts      localStorage 持久化，generateSessionTitle() 调 /query/title
 ├── hooks/
-│   ├── useSSE.ts        SSE done 事件清空 answer 状态（修复重复气泡 bug）
+│   ├── useSSE.ts        SSE done 事件，携带 graphPaths/graphChunkIds
 │   └── useDocuments.ts  upload(file, chunkSettings?) 透传切片参数
 └── components/
-    ├── ChatInterface.tsx  流式气泡 + 持久消息分离，避免重复渲染
+    ├── ChatInterface.tsx  流式 Markdown 渲染，图谱实体弹窗，引用编号，来源 badge
     ├── DocumentsPage.tsx  切片策略面板（3 种），chunkScroll + flex min-height:0 修复滚动
-    ├── GraphViewer.tsx    Cytoscape cose 布局，点击节点展开子图，fullData 重置
-    ├── SessionList.tsx    历史会话侧边栏
-    └── SourcePanel.tsx    折叠来源面板
+    ├── GraphViewer.tsx    文档过滤、实体列表、搜索、分类、总览 banner
+    ├── GraphEntityModal.tsx  实体关系弹窗，三档尺寸，焦点节点高亮
+    ├── DebugPage.tsx      检索调试页，三列展示 + 双路对比答案
+    ├── SessionList.tsx    历史会话侧边栏，主题切换按钮
+    └── SourcePanel.tsx    折叠来源面板，图谱 badge 标注
 ```
 
 ---
@@ -79,7 +83,11 @@ frontend/src/
 
 **ChromaDB where 过滤**：必须用 `{"$eq": value}` 而非直接 `{"key": value}`，否则新版 chromadb 静默返回空。所有 `.get(where=...)` 和 `.delete(where=...)` 调用均已修正。
 
-**流式气泡重复 bug**：SSE `done` 事件时将 `setState` 的 `answer` 清空为 `''`，流式气泡条件 `loading || answer` 变 false，气泡消失，`onDone` 回调随后将完整消息写入 `session.messages`，只渲染一条。
+**流式气泡重复问题**：`onDone` 和清空流式状态合并为一次 React 批处理，避免两次渲染闪烁。会话标题生成异步后台执行，通过独立的 `onSessionTitleUpdate` 回调只更新 title 字段，不触发消息区重渲染。
+
+**图谱检索双路策略**：`rag_engine.py` 同时运行 spaCy NER 和关键词 fuzzy 匹配，结果合并去重。NER 识别不到的描述性短语（如"本次咨询服务"）通过关键词子串匹配仍可命中图谱节点。
+
+**实体过滤**：`graph_builder.py` 设有 `VALID_ENTITY_TYPES` 白名单，过滤数字、时间、序号等噪音实体类型，只保留 PERSON/ORG/GPE 等有语义的类型。
 
 **切片滚动 bug**：`detailPane` 和 `chunkScroll` 需要 `min-height: 0`，`chunkCard` 设 `flex-shrink: 0` + `overflow: visible`，`chunkBody` 设 `max-height: 400px` + `overflow-y: auto`。
 
