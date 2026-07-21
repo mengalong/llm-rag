@@ -3,7 +3,7 @@ import json
 from collections import Counter
 
 from ...core.graph_store import get_graph, to_graph_data, get_subgraph, get_subgraph_by_document
-from ...models.graph import GraphData, GraphStats, GraphOverview, EntityTypeStat, RelationStat
+from ...models.graph import GraphData, GraphStats, GraphOverview, EntityTypeStat, RelationStat, GraphEntityCategories, EntityDetail
 
 router = APIRouter()
 
@@ -95,6 +95,137 @@ async def subgraph(entity: str = Query(...), depth: int = Query(2, ge=1, le=5)):
 async def graph_by_document(document_id: str):
     sub = get_subgraph_by_document(document_id)
     return to_graph_data(sub)
+
+
+@router.get("/entity-categories", response_model=GraphEntityCategories)
+async def entity_categories():
+    """Return entity nodes grouped by source (NER vs LLM) and type."""
+    from ...models.graph import EntityCategoryStats
+
+    g = get_graph()
+    NER_TYPES = {'PERSON', 'ORG', 'GPE', 'PRODUCT', 'LOC', 'WORK_OF_ART', 'EVENT', 'FAC', 'NORP'}
+
+    ner_groups: dict[str, list[str]] = {}
+    llm_labels: list[str] = []
+
+    for _, data in g.nodes(data=True):
+        t = data.get('type', 'ENTITY')
+        label = data.get('label', '')
+        if not label:
+            continue
+        if t in NER_TYPES:
+            ner_groups.setdefault(t, []).append(label)
+        else:
+            llm_labels.append(label)
+
+    ner_nodes = [
+        EntityCategoryStats(
+            source='ner',
+            type=t,
+            label=TYPE_LABEL.get(t, t),
+            color=TYPE_COLOR.get(t, '#94a3b8'),
+            count=len(labels),
+            examples=sorted(labels, key=len)[:5],
+        )
+        for t, labels in sorted(ner_groups.items(), key=lambda x: -len(x[1]))
+    ]
+
+    llm_nodes = [EntityCategoryStats(
+        source='llm',
+        type='ENTITY',
+        label='LLM 抽取实体',
+        color='#94a3b8',
+        count=len(llm_labels),
+        examples=llm_labels[:5],
+    )] if llm_labels else []
+
+    return GraphEntityCategories(
+        ner_nodes=ner_nodes,
+        llm_nodes=llm_nodes,
+        ner_total=sum(len(v) for v in ner_groups.values()),
+        llm_total=len(llm_labels),
+    )
+
+
+@router.get("/entity-type/{entity_type}")
+async def entities_by_type(
+    entity_type: str,
+    page: int = 1,
+    page_size: int = 50,
+):
+    """Return paginated entities of a given type with document info."""
+    from ...config import settings
+    from ...db.file_store import FileStore
+
+    g = get_graph()
+    NER_TYPES = {'PERSON', 'ORG', 'GPE', 'PRODUCT', 'LOC', 'WORK_OF_ART', 'EVENT', 'FAC', 'NORP'}
+
+    # resolve type: "LLM" maps to ENTITY, otherwise use as-is
+    target_type = "ENTITY" if entity_type.upper() == "LLM" else entity_type.upper()
+
+    nodes = [
+        (nid, data) for nid, data in g.nodes(data=True)
+        if data.get("type", "ENTITY") == target_type
+    ]
+    # sort by degree desc (most connected first)
+    nodes.sort(key=lambda x: g.degree(x[0]), reverse=True)
+    total = len(nodes)
+    start = (page - 1) * page_size
+    page_nodes = nodes[start: start + page_size]
+
+    # build doc_id → filename map
+    store = FileStore(settings.db_path)
+    await store.init()
+    all_docs = await store.list_all()
+    doc_map = {d.id: d.filename for d in all_docs}
+
+    items = []
+    for nid, data in page_nodes:
+        doc_ids = json.loads(data.get("document_ids", "[]"))
+        items.append(EntityDetail(
+            label=data.get("label", nid),
+            type=data.get("type", "ENTITY"),
+            degree=g.degree(nid),
+            document_ids=doc_ids,
+            document_names=[doc_map.get(did, did) for did in doc_ids],
+        ))
+
+    return {"total": total, "page": page, "page_size": page_size, "items": [i.model_dump() for i in items]}
+
+
+@router.get("/search")
+async def search_entities(q: str = Query(..., min_length=1)):
+    """Search graph entities using NER + fuzzy keyword matching.
+    Only returns entities that actually exist in the graph.
+    """
+    from ...core.rag_engine import _extract_entities_from_question, _fuzzy_match_entities
+    from ...core.graph_builder import _node_id
+
+    g = get_graph()
+
+    def _exists(label: str) -> bool:
+        """Check if label has a node in graph (exact or partial match)."""
+        nid = _node_id(label)
+        if g.has_node(nid):
+            return True
+        # partial match fallback (same logic as _get_graph_chunks)
+        for _, data in g.nodes(data=True):
+            if label.lower() in data.get("label", "").lower():
+                return True
+        return False
+
+    ner_entities = [e for e in _extract_entities_from_question(q) if _exists(e)]
+    fuzzy_pairs = _fuzzy_match_entities(q, max_results=10)
+    ner_set = set(ner_entities)
+    fuzzy_matches = [
+        {"label": label, "matched_by": kw}
+        for label, kw in fuzzy_pairs
+        if label not in ner_set
+    ]
+    return {
+        "ner_entities": ner_entities,
+        "fuzzy_matches": fuzzy_matches,
+    }
 
 
 @router.get("/node/{node_id}")

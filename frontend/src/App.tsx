@@ -3,6 +3,7 @@ import ChatInterface from './components/ChatInterface'
 import GraphViewer from './components/GraphViewer'
 import SessionList from './components/SessionList'
 import DocumentsPage from './components/DocumentsPage'
+import DebugPage from './components/DebugPage'
 import { useDocuments } from './hooks/useDocuments'
 import { type ChunkSettings } from './api/client'
 import {
@@ -12,7 +13,7 @@ import {
 } from './api/sessions'
 import './App.css'
 
-type Tab = 'chat' | 'docs' | 'graph'
+type Tab = 'chat' | 'docs' | 'graph' | 'debug'
 type Theme = 'dark' | 'light'
 
 function useTheme(): [Theme, () => void] {
@@ -70,6 +71,14 @@ export default function App() {
     })
   }, [])
 
+  const handleSessionTitleUpdate = useCallback((id: string, title: string) => {
+    setSessions((prev) => {
+      const next = prev.map((s) => s.id === id ? { ...s, title } : s)
+      saveSessions(next)
+      return next
+    })
+  }, [])
+
   const handleNewSession = useCallback(() => {
     const s = createSession()
     persistSessions([...sessions, s])
@@ -114,14 +123,14 @@ export default function App() {
           </div>
           <div className="sidebar-docs" style={{ padding: '8px 12px' }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>导航</div>
-            {(['chat', 'docs', 'graph'] as Tab[]).map((t) => (
+            {(['chat', 'docs', 'graph', 'debug'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setActiveTab(t)}
                 className={activeTab === t ? 'tab active' : 'tab'}
                 style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 2, borderRadius: 6, padding: '7px 10px' }}
               >
-                {t === 'chat' ? '💬 对话' : t === 'docs' ? '📁 文件管理' : '🕸 知识图谱'}
+                {t === 'chat' ? '💬 对话' : t === 'docs' ? '📁 文件管理' : t === 'graph' ? '🕸 知识图谱' : '🔍 检索调试'}
               </button>
             ))}
           </div>
@@ -133,6 +142,7 @@ export default function App() {
           <button className={activeTab === 'chat' ? 'tab active' : 'tab'} onClick={() => setActiveTab('chat')}>对话</button>
           <button className={activeTab === 'docs' ? 'tab active' : 'tab'} onClick={() => setActiveTab('docs')}>文件管理</button>
           <button className={activeTab === 'graph' ? 'tab active' : 'tab'} onClick={() => setActiveTab('graph')}>知识图谱</button>
+          <button className={activeTab === 'debug' ? 'tab active' : 'tab'} onClick={() => setActiveTab('debug')}>检索调试</button>
 
           {docError && activeTab !== 'docs' && (
             <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--danger)' }}>{docError}</span>
@@ -141,7 +151,7 @@ export default function App() {
 
         <div className="content">
           <div style={{ display: activeTab === 'chat' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-            <ChatInterface session={activeSession} onSessionUpdate={handleSessionUpdate} />
+            <ChatInterface session={activeSession} onSessionUpdate={handleSessionUpdate} onSessionTitleUpdate={handleSessionTitleUpdate} />
           </div>
           {activeTab === 'docs' && (
             <DocumentsPage
@@ -154,6 +164,9 @@ export default function App() {
           )}
           {activeTab === 'graph' && (
             <GraphViewer docs={docs} />
+          )}
+          {activeTab === 'debug' && (
+            <DebugPage />
           )}
         </div>
       </main>

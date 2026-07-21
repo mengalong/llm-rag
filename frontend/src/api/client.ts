@@ -136,6 +136,74 @@ export interface GraphOverview {
   top_relations: RelationStat[]
 }
 
+export interface DebugHit {
+  chunk_id: string
+  filename: string
+  page: number | null
+  chunk_index: number
+  score: number
+  source: 'vector' | 'graph'
+  heading: string | null
+  excerpt: string
+}
+
+export interface MatchedGraphNode {
+  label: string
+  type: string
+  degree: number
+  match_reason: 'ner' | 'fuzzy' | 'graph_neighbor'
+  matched_by: string
+}
+
+export interface DebugResult {
+  question: string
+  ner_entities: string[]
+  fuzzy_entities: string[]
+  matched_graph_nodes: MatchedGraphNode[]
+  graph_paths: import('../api/sessions').GraphPath[]
+  vector_hits: DebugHit[]
+  graph_hits: DebugHit[]
+  final_hits: DebugHit[]
+  answer_with_graph: string
+  answer_without_graph: string
+}
+
+export interface GraphSearchResult {
+  ner_entities: string[]
+  fuzzy_matches: Array<{ label: string; matched_by: string }>
+}
+
+export interface EntityCategoryStats {
+  source: 'ner' | 'llm'
+  type: string
+  label: string
+  color: string
+  count: number
+  examples: string[]
+}
+
+export interface GraphEntityCategories {
+  ner_nodes: EntityCategoryStats[]
+  llm_nodes: EntityCategoryStats[]
+  ner_total: number
+  llm_total: number
+}
+
+export interface EntityDetail {
+  label: string
+  type: string
+  degree: number
+  document_ids: string[]
+  document_names: string[]
+}
+
+export interface EntityTypePageResult {
+  total: number
+  page: number
+  page_size: number
+  items: EntityDetail[]
+}
+
 export const getGraph = () => api.get<GraphData>('/graph/')
 export const getSubgraph = (entity: string, depth = 2) =>
   api.get<GraphData>('/graph/subgraph', { params: { entity, depth } })
@@ -143,3 +211,11 @@ export const getGraphByDocument = (docId: string) =>
   api.get<GraphData>(`/graph/document/${docId}`)
 export const getGraphOverview = () =>
   api.get<GraphOverview>('/graph/overview')
+export const getGraphEntityCategories = () =>
+  api.get<GraphEntityCategories>('/graph/entity-categories')
+export const getEntitiesByType = (type: string, page: number, pageSize = 50) =>
+  api.get<EntityTypePageResult>(`/graph/entity-type/${type}`, { params: { page, page_size: pageSize } })
+export const searchGraphEntities = (keyword: string) =>
+  api.get<GraphSearchResult>('/graph/search', { params: { q: keyword } })
+export const debugQuery = (question: string, topK: number) =>
+  api.post<DebugResult>('/query/debug', { question, top_k: topK })

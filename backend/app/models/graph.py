@@ -47,6 +47,30 @@ class GraphOverview(BaseModel):
     top_relations: list[RelationStat]
 
 
+class EntityDetail(BaseModel):
+    label: str
+    type: str
+    degree: int
+    document_ids: list[str]
+    document_names: list[str]
+
+
+class EntityCategoryStats(BaseModel):
+    source: str               # "ner" | "llm"
+    type: str
+    label: str
+    color: str
+    count: int
+    examples: list[str]
+
+
+class GraphEntityCategories(BaseModel):
+    ner_nodes: list[EntityCategoryStats]
+    llm_nodes: list[EntityCategoryStats]
+    ner_total: int
+    llm_total: int
+
+
 class GraphData(BaseModel):
     nodes: list[GraphNode]
     edges: list[GraphEdge]
