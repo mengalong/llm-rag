@@ -102,40 +102,52 @@ export default function App() {
 
   useEffect(() => { refresh() }, [])
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const showSessionSidebar = activeTab === 'chat'
 
   return (
     <div className="app">
-      {showSessionSidebar ? (
-        <SessionList
-          sessions={sessions}
-          activeId={activeSessionId}
-          onSelect={handleSessionSelect}
-          onNew={handleNewSession}
-          onDelete={handleDeleteSession}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-        />
-      ) : (
-        <aside className="sidebar">
-          <div className="sidebar-top">
-            <div className="logo">Local RAG</div>
-          </div>
-          <div className="sidebar-docs" style={{ padding: '8px 12px' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>导航</div>
-            {(['chat', 'docs', 'graph', 'debug'] as Tab[]).map((t) => (
-              <button
-                key={t}
-                onClick={() => setActiveTab(t)}
-                className={activeTab === t ? 'tab active' : 'tab'}
-                style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 2, borderRadius: 6, padding: '7px 10px' }}
-              >
-                {t === 'chat' ? '💬 对话' : t === 'docs' ? '📁 文件管理' : t === 'graph' ? '🕸 知识图谱' : '🔍 检索调试'}
-              </button>
-            ))}
-          </div>
-        </aside>
-      )}
+      <div className={`sidebarWrap ${sidebarCollapsed ? 'sidebarCollapsed' : ''}`}>
+        {/* Collapse toggle button */}
+        <button
+          className="sidebarToggle"
+          onClick={() => setSidebarCollapsed(v => !v)}
+          title={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+        >
+          {sidebarCollapsed ? '›' : '‹'}
+        </button>
+
+        {!sidebarCollapsed && (showSessionSidebar ? (
+          <SessionList
+            sessions={sessions}
+            activeId={activeSessionId}
+            onSelect={handleSessionSelect}
+            onNew={handleNewSession}
+            onDelete={handleDeleteSession}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        ) : (
+          <aside className="sidebar">
+            <div className="sidebar-top">
+              <div className="logo">Local RAG</div>
+            </div>
+            <div className="sidebar-docs" style={{ padding: '8px 12px' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>导航</div>
+              {(['chat', 'docs', 'graph', 'debug'] as Tab[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setActiveTab(t)}
+                  className={activeTab === t ? 'tab active' : 'tab'}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', marginBottom: 2, borderRadius: 6, padding: '7px 10px' }}
+                >
+                  {t === 'chat' ? '💬 对话' : t === 'docs' ? '📁 文件管理' : t === 'graph' ? '🕸 知识图谱' : '🔍 检索调试'}
+                </button>
+              ))}
+            </div>
+          </aside>
+        ))}
+      </div>
 
       <main className="main">
         <div className="topbar">

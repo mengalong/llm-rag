@@ -291,6 +291,7 @@ export const getGraphDiff = (v1: string, v2: string) =>
   api.get<GraphDiff>('/graph/diff', { params: { v1, v2 } })
 export const loadGraphSnapshot = (version: string) =>
   api.post(`/graph/load-snapshot/${version}`)
+export const graphEventsUrl = () => `/api/v1/graph/events`
 export const searchGraphEntities = (keyword: string) =>
   api.get<GraphSearchResult>('/graph/search', { params: { q: keyword } })
 export const debugQueryStream = (question: string, topK: number) =>

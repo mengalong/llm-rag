@@ -5,7 +5,7 @@ import {
   type GraphEntityCategories, type EntityCategoryStats, type EntityDetail, type EntityTypePageResult,
   type GraphSnapshot, type GraphDiff, type GraphDiffNode, type Document,
   getSubgraph, getGraphByDocument, getGraphOverview, getGraphEntityCategories, getEntitiesByType,
-  getGraphSnapshots, deleteGraphSnapshot, getGraphDiff, loadGraphSnapshot, searchGraphEntities
+  getGraphSnapshots, deleteGraphSnapshot, getGraphDiff, loadGraphSnapshot, graphEventsUrl, searchGraphEntities
 } from '../api/client'
 import GraphEntityModal from './GraphEntityModal'
 import styles from './GraphViewer.module.css'
@@ -155,19 +155,49 @@ export default function GraphViewer({ docs }: Props) {
   const [diffLoading, setDiffLoading] = useState(false)
   const [diffSearch, setDiffSearch] = useState('')
 
+  // Toast state for graph update notification
+  const [graphUpdateToast, setGraphUpdateToast] = useState<string | null>(null)
+  const esRef = useRef<EventSource | null>(null)
+
   const refreshOverview = () => {
     getGraphOverview().then((r) => setOverview(r.data)).catch(console.error)
     getGraphEntityCategories().then((r) => setCategories(r.data)).catch(console.error)
   }
 
-  useEffect(() => {
+  const refreshAll = () => {
     refreshOverview()
     getGraphSnapshots().then((r) => setSnapshots(r.data)).catch(console.error)
-    // Fetch current active version from embedded graphml tag
     fetch('/api/v1/graph/current-version')
       .then(r => r.json())
       .then(d => setActiveVersion(d.version))
       .catch(console.error)
+  }
+
+  useEffect(() => {
+    refreshAll()
+
+    // Subscribe to graph update events
+    const es = new EventSource(graphEventsUrl())
+    esRef.current = es
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'graph_updated') {
+          refreshAll()
+          // Reset doc-specific data so it reloads with new graph
+          setDocGraphData(null)
+          setSubgraphData(null)
+          setDiffResult(null)
+          setDiffV1(null)
+          setDiffV2(null)
+          setGraphUpdateToast(`图谱已更新，已加载 ${data.version}`)
+          setTimeout(() => setGraphUpdateToast(null), 4000)
+        }
+      } catch { /* ignore */ }
+    }
+    es.onerror = () => { /* reconnect handled by browser */ }
+
+    return () => { es.close(); esRef.current = null }
   }, [])
 
   const handleLoadSnapshot = async (version: string) => {
@@ -602,64 +632,73 @@ export default function GraphViewer({ docs }: Props) {
                   )
                 })()}
 
-                {/* Stats + Type distribution + Top relations — 3 columns */}
-                <div className={styles.overviewThreeCols}>
-                  {/* Col 1: stat cards */}
-                  <div className={styles.overviewThreeColCard}>
-                    <div className={styles.overviewDefaultSectionTitle}>统计数据</div>
-                    <div className={styles.overviewCardGridInner}>
-                      {[
-                        { v: overview.node_count.toLocaleString(), k: '实体节点', accent: true },
-                        { v: overview.edge_count.toLocaleString(), k: '关系边', accent: false },
-                        { v: overview.semantic_edge_count.toLocaleString(), k: '语义关系', accent: false },
-                        { v: overview.cooccur_edge_count.toLocaleString(), k: '共现关系', accent: false },
-                        { v: overview.document_count, k: '覆盖文档', accent: false },
-                      ].map(({ v, k, accent }) => (
-                        <div key={k} className={styles.overviewCard}>
-                          <div className={`${styles.overviewCardValue} ${accent ? styles.overviewCardValueAccent : ''}`}>{v}</div>
-                          <div className={styles.overviewCardKey}>{k}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Col 2: entity type distribution */}
-                  {overview.entity_type_stats.length > 0 && (
-                    <div className={styles.overviewThreeColCard}>
-                      <div className={styles.overviewDefaultSectionTitle}>实体类型分布</div>
-                      <div className={styles.overviewThreeColScroll}>
-                        {overview.entity_type_stats.map((s) => {
-                          const pct = Math.round(s.count / overview.node_count * 100)
-                          return (
-                            <div key={s.type} className={styles.overviewDefaultRow}>
-                              <div className={styles.overviewDefaultDot} style={{ background: s.color }} />
-                              <span className={styles.overviewDefaultLabel}>{s.label}</span>
-                              <div className={styles.overviewDefaultTrack}>
-                                <div className={styles.overviewDefaultFill} style={{ width: `${pct}%`, background: s.color }} />
-                              </div>
-                              <span className={styles.overviewDefaultCount}>{s.count}</span>
+                {/* Stats + Type distribution + Top relations — auto columns */}
+                {(() => {
+                  const hasTypes = overview.entity_type_stats.length > 0
+                  const hasRelations = overview.top_relations.length > 0
+                  const colCount = 1 + (hasTypes ? 1 : 0) + (hasRelations ? 1 : 0)
+                  const colStyle = { gridTemplateColumns: `repeat(${colCount}, 1fr)` }
+                  return (
+                    <div className={styles.overviewThreeCols} style={colStyle}>
+                      {/* Col 1: stat cards */}
+                      <div className={styles.overviewThreeColCard}>
+                        <div className={styles.overviewDefaultSectionTitle}>统计数据</div>
+                        <div className={styles.overviewCardGridInner}>
+                          {[
+                            { v: overview.node_count.toLocaleString(), k: '实体节点', accent: true },
+                            { v: overview.edge_count.toLocaleString(), k: '关系边', accent: false },
+                            { v: overview.semantic_edge_count.toLocaleString(), k: '语义关系', accent: false },
+                            { v: overview.cooccur_edge_count.toLocaleString(), k: '共现关系', accent: false },
+                            { v: overview.document_count, k: '覆盖文档', accent: false },
+                          ].map(({ v, k, accent }) => (
+                            <div key={k} className={styles.overviewCard}>
+                              <div className={`${styles.overviewCardValue} ${accent ? styles.overviewCardValueAccent : ''}`}>{v}</div>
+                              <div className={styles.overviewCardKey}>{k}</div>
                             </div>
-                          )
-                        })}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
 
-                  {/* Col 3: top relations */}
-                  {overview.top_relations.length > 0 && (
-                    <div className={styles.overviewThreeColCard}>
-                      <div className={styles.overviewDefaultSectionTitle}>高频语义关系</div>
-                      <div className={styles.overviewThreeColScroll}>
-                        {overview.top_relations.map((r) => (
-                          <div key={r.relation} className={styles.overviewDefaultRelRow}>
-                            <span className={styles.overviewDefaultRelName}>{r.relation}</span>
-                            <span className={styles.overviewDefaultRelCount}>{r.count}</span>
+                      {/* Col 2: entity type distribution */}
+                      {hasTypes && (
+                        <div className={styles.overviewThreeColCard}>
+                          <div className={styles.overviewDefaultSectionTitle}>实体类型分布</div>
+                          <div className={styles.overviewThreeColScroll}>
+                            {overview.entity_type_stats.map((s) => {
+                              const pct = Math.round(s.count / overview.node_count * 100)
+                              return (
+                                <div key={s.type} className={styles.overviewDefaultRow}>
+                                  <div className={styles.overviewDefaultDot} style={{ background: s.color }} />
+                                  <span className={styles.overviewDefaultLabel}>{s.label}</span>
+                                  <div className={styles.overviewDefaultTrack}>
+                                    <div className={styles.overviewDefaultFill} style={{ width: `${pct}%`, background: s.color }} />
+                                  </div>
+                                  <span className={styles.overviewDefaultCount}>{s.count}</span>
+                                </div>
+                              )
+                            })}
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      )}
+
+                      {/* Col 3: top relations */}
+                      {hasRelations && (
+                        <div className={styles.overviewThreeColCard}>
+                          <div className={styles.overviewDefaultSectionTitle}>高频语义关系</div>
+                          <div className={styles.overviewThreeColScroll}>
+                            {overview.top_relations.map((r) => (
+                              <div key={r.relation} className={styles.overviewDefaultRelRow}>
+                                <span className={styles.overviewDefaultRelName}>{r.relation}</span>
+                                <span className={styles.overviewDefaultRelCount}>{r.count}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  )
+                })()}
+
               </>
             )}
 
@@ -834,6 +873,11 @@ export default function GraphViewer({ docs }: Props) {
 
       {modalEntity && (
         <GraphEntityModal entity={modalEntity} onClose={() => setModalEntity(null)} />
+      )}
+
+      {/* Graph update toast */}
+      {graphUpdateToast && (
+        <div className={styles.updateToast}>{graphUpdateToast}</div>
       )}
     </div>
   )
