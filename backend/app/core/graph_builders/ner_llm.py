@@ -28,6 +28,17 @@ def _node_id(label: str) -> str:
     return hashlib.md5(label.strip().lower().encode()).hexdigest()[:16]
 
 
+def _normalize_entity_text(text: str) -> str:
+    """Strip unmatched book-title brackets and surrounding whitespace."""
+    t = text.strip()
+    if t.startswith('《') and not t.endswith('》'):
+        t = t[1:].strip()
+    elif t.endswith('》') and not t.startswith('《'):
+        t = t[:-1].strip()
+    return t
+    return hashlib.md5(label.strip().lower().encode()).hexdigest()[:16]
+
+
 class NerLlmBuilder(GraphBuilderBase):
     """Strategy 1: spaCy NER for entities + LLM for relation triples.
 
@@ -46,11 +57,13 @@ class NerLlmBuilder(GraphBuilderBase):
         total = 0
 
         for chunk in chunks:
-            doc = nlp(chunk.content)
+            from ..text_cleaner import clean_for_ner
+            clean_content = clean_for_ner(chunk.content)
+            doc = nlp(clean_content)
             entities = [
-                (ent.text.strip(), ent.label_)
+                (_normalize_entity_text(ent.text.strip()), ent.label_)
                 for ent in doc.ents
-                if ent.text.strip() and graph_cfg.is_valid_entity(ent.text.strip(), ent.label_)
+                if ent.text.strip() and graph_cfg.is_valid_entity(_normalize_entity_text(ent.text.strip()), ent.label_)
             ]
             if not entities:
                 continue

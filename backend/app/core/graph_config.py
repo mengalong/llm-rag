@@ -90,6 +90,15 @@ class _GraphConfig:
         return set(w.lower() for w in self._ef.get("programming_stopwords", default))
 
     def is_valid_entity(self, text: str, label: str) -> bool:
+        # Strip unmatched book-title brackets before any other check
+        # 《xxx → xxx  or  xxx》 → xxx  (keep 《xxx》 as-is)
+        if text.startswith('《') and not text.endswith('》'):
+            text = text[1:].strip()
+        elif text.endswith('》') and not text.startswith('《'):
+            text = text[:-1].strip()
+        if not text:
+            return False
+
         if label not in self.valid_entity_types:
             return False
         if len(text) < self.min_length:
@@ -107,6 +116,21 @@ class _GraphConfig:
                 return False
         # camelCase starting with lowercase (tabId, webContents, onClick)
         if re.match(r'^[a-z]+[A-Z]', text):
+            return False
+        # PascalCase with dot notation (HiddenWebContentsManager.clickElement)
+        if re.search(r'[a-zA-Z]\.[a-zA-Z]', text):
+            return False
+        # function call signatures: contains ( anywhere
+        if '(' in text:
+            return False
+        # file names with code extensions
+        if re.search(r'\.(html|js|ts|css|json|vue|jsx|tsx|py|java|go|rs)$', text, re.IGNORECASE):
+            return False
+        # ends with - or _ (path fragment like "aiwork-")
+        if re.search(r'[-_]$', text):
+            return False
+        # PascalCase identifiers (HiddenWebContentsManager, CommonFileManager)
+        if re.match(r'^[A-Z][a-z]+([A-Z][a-z]+)+$', text) and len(text) > 12:
             return False
         return True
 

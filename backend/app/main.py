@@ -27,7 +27,10 @@ async def lifespan(app: FastAPI):
     debug_store = DebugRecordStore(settings.db_path)
     await debug_store.init()
     logger.info("Database initialized at %s", settings.db_path)
+    from .core.graph_watcher import start_watcher, stop_watcher
+    start_watcher()
     yield
+    stop_watcher()
     logger.info("Shutting down")
 
 

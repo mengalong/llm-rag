@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 import json
+import asyncio
 from collections import Counter
 
 from ...core.graph_store import (
@@ -50,6 +51,36 @@ async def load_snapshot(version: str):
         return {"loaded": version, "node_count": meta.get("node_count", 0)}
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/events")
+async def graph_events(request: Request):
+    """SSE endpoint — pushes graph_updated events when the graph file changes."""
+    from fastapi.responses import StreamingResponse
+    from ...core.graph_watcher import subscribe, unsubscribe
+
+    queue = subscribe()
+
+    async def event_stream():
+        try:
+            # Send initial ping so the client knows the connection is live
+            yield f"data: {json.dumps({'type': 'connected'})}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except asyncio.TimeoutError:
+                    # Keep-alive heartbeat
+                    yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+        finally:
+            unsubscribe(queue)
+
+    import asyncio
+    from fastapi import Request as _Req
+    return StreamingResponse(event_stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @router.get("/overview", response_model=GraphOverview)
