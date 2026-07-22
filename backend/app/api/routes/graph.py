@@ -5,6 +5,7 @@ from collections import Counter
 from ...core.graph_store import (
     get_graph, to_graph_data, get_subgraph, get_subgraph_by_document,
     list_snapshots, load_snapshot_meta, diff_snapshots, delete_snapshot,
+    get_current_version_from_graph, load_snapshot_as_current,
 )
 from ...models.graph import GraphData, GraphStats, GraphOverview, EntityTypeStat, RelationStat, GraphEntityCategories, EntityDetail
 
@@ -24,41 +25,31 @@ TYPE_COLOR = {
 
 @router.get("/current-version")
 async def current_graph_version():
-    """Return current loaded graph version by comparing graphml mtime with snapshots."""
-    import os
-    from datetime import datetime, timezone
+    """Return current loaded graph version from embedded tag in graphml."""
     from ...core.graph_config import graph_cfg
 
-    graphml_path = os.path.join(settings.graph_dir, "knowledge_graph.graphml")
-    snapshots = list_snapshots()
-
-    version = "v0"
-    graph_ner_model = ""
-    graph_llm_model = None
-    graph_skip_llm = True
-    node_count = 0
-
-    if snapshots:
-        latest = snapshots[0]
-        graphml_mtime = os.path.getmtime(graphml_path) if os.path.exists(graphml_path) else 0
-        snap_ts = datetime.fromisoformat(latest["timestamp"].replace("Z", "+00:00")).timestamp()
-        if graphml_mtime <= snap_ts + 5:  # 5s tolerance
-            version = latest["version"]
-        else:
-            version = "unsaved"
-        graph_ner_model = latest.get("ner_model", "")
-        graph_llm_model = latest.get("llm_model")
-        graph_skip_llm = bool(latest.get("skip_llm", True))
-        node_count = latest.get("node_count", 0)
+    version = get_current_version_from_graph()
+    meta = load_snapshot_meta(version) if version not in ("unknown", "v0") else {}
+    node_count = meta.get("node_count", get_graph().number_of_nodes())
 
     return {
         "version": version,
         "node_count": node_count,
-        "graph_ner_model": graph_ner_model,
-        "graph_llm_model": graph_llm_model,
-        "graph_skip_llm": graph_skip_llm,
+        "graph_ner_model": meta.get("ner_model", ""),
+        "graph_llm_model": meta.get("llm_model"),
+        "graph_skip_llm": meta.get("skip_llm", True),
         "graph_strategy": graph_cfg.builder_strategy,
     }
+
+
+@router.post("/load-snapshot/{version}")
+async def load_snapshot(version: str):
+    """Switch the active graph to the given snapshot version."""
+    try:
+        meta = load_snapshot_as_current(version)
+        return {"loaded": version, "node_count": meta.get("node_count", 0)}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/overview", response_model=GraphOverview)

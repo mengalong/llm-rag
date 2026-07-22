@@ -289,6 +289,8 @@ export const deleteGraphSnapshot = (version: string) =>
   api.delete(`/graph/snapshots/${version}`)
 export const getGraphDiff = (v1: string, v2: string) =>
   api.get<GraphDiff>('/graph/diff', { params: { v1, v2 } })
+export const loadGraphSnapshot = (version: string) =>
+  api.post(`/graph/load-snapshot/${version}`)
 export const searchGraphEntities = (keyword: string) =>
   api.get<GraphSearchResult>('/graph/search', { params: { q: keyword } })
 export const debugQueryStream = (question: string, topK: number) =>

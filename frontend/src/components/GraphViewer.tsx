@@ -5,7 +5,7 @@ import {
   type GraphEntityCategories, type EntityCategoryStats, type EntityDetail, type EntityTypePageResult,
   type GraphSnapshot, type GraphDiff, type GraphDiffNode, type Document,
   getSubgraph, getGraphByDocument, getGraphOverview, getGraphEntityCategories, getEntitiesByType,
-  getGraphSnapshots, deleteGraphSnapshot, getGraphDiff, searchGraphEntities
+  getGraphSnapshots, deleteGraphSnapshot, getGraphDiff, loadGraphSnapshot, searchGraphEntities
 } from '../api/client'
 import GraphEntityModal from './GraphEntityModal'
 import styles from './GraphViewer.module.css'
@@ -147,17 +147,41 @@ export default function GraphViewer({ docs }: Props) {
   // Snapshot & diff state
   const [snapshots, setSnapshots] = useState<GraphSnapshot[]>([])
   const [snapshotsOpen, setSnapshotsOpen] = useState(false)
+  const [activeVersion, setActiveVersion] = useState<string | null>(null)
+  const [loadingVersion, setLoadingVersion] = useState<string | null>(null)
   const [diffV1, setDiffV1] = useState<string | null>(null)
   const [diffV2, setDiffV2] = useState<string | null>(null)
   const [diffResult, setDiffResult] = useState<GraphDiff | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
   const [diffSearch, setDiffSearch] = useState('')
 
-  useEffect(() => {
+  const refreshOverview = () => {
     getGraphOverview().then((r) => setOverview(r.data)).catch(console.error)
     getGraphEntityCategories().then((r) => setCategories(r.data)).catch(console.error)
+  }
+
+  useEffect(() => {
+    refreshOverview()
     getGraphSnapshots().then((r) => setSnapshots(r.data)).catch(console.error)
+    // Fetch current active version from embedded graphml tag
+    fetch('/api/v1/graph/current-version')
+      .then(r => r.json())
+      .then(d => setActiveVersion(d.version))
+      .catch(console.error)
   }, [])
+
+  const handleLoadSnapshot = async (version: string) => {
+    if (version === activeVersion) return
+    if (!confirm(`切换到 ${version}？当前检索将使用新版本图谱。`)) return
+    setLoadingVersion(version)
+    try {
+      await loadGraphSnapshot(version)
+      setActiveVersion(version)
+      refreshOverview()
+      getGraphSnapshots().then(r => setSnapshots(r.data)).catch(console.error)
+    } catch (e) { console.error(e) }
+    finally { setLoadingVersion(null) }
+  }
 
   const runSearch = () => {
     const q = searchQuery.trim()
@@ -313,14 +337,16 @@ export default function GraphViewer({ docs }: Props) {
                   const modelLine = s.skip_llm
                     ? `spaCy ${shortNer}`
                     : `spaCy ${shortNer} + ${(s.llm_model ?? '').split(/[\s/]/).pop() ?? 'LLM'}`
+                  const isActive = activeVersion === s.version
                   return (
                     <div
                       key={s.version}
-                      className={`${styles.snapshotItem} ${isV1 ? styles.snapshotItemV1 : ''} ${isV2 ? styles.snapshotItemV2 : ''}`}
+                      className={`${styles.snapshotItem} ${isV1 ? styles.snapshotItemV1 : ''} ${isV2 ? styles.snapshotItemV2 : ''} ${isActive && !isV1 && !isV2 ? styles.snapshotItemActive : ''}`}
                       onClick={() => toggleDiffVersion(s.version)}
                     >
                       <div className={styles.snapshotMain}>
                         <span className={styles.snapshotVer}>{s.version}</span>
+                        {isActive && <span className={styles.snapshotActiveBadge}>使用中</span>}
                         <span className={styles.snapshotTs}>{ts}</span>
                         <span className={styles.snapshotNodes}>{s.node_count.toLocaleString()}节点</span>
                         {(isV1 || isV2) && (
@@ -328,6 +354,14 @@ export default function GraphViewer({ docs }: Props) {
                             {isV1 ? 'A' : 'B'}
                           </span>
                         )}
+                        <button
+                          className={styles.snapshotLoadBtn}
+                          disabled={isActive || loadingVersion === s.version}
+                          onClick={(e) => { e.stopPropagation(); handleLoadSnapshot(s.version) }}
+                          title={isActive ? '当前使用中' : `切换到 ${s.version}`}
+                        >
+                          {loadingVersion === s.version ? '切换中' : isActive ? '✓' : '切换'}
+                        </button>
                         <button className={styles.snapshotDel} onClick={(e) => handleDeleteSnapshot(s.version, e)} title="删除">×</button>
                       </div>
                       <div className={styles.snapshotMeta}>
@@ -542,77 +576,90 @@ export default function GraphViewer({ docs }: Props) {
               <>
                 {/* Single-column current graph overview — card style */}
                 {snapshots.length > 0 && (() => {
-                  const latest = snapshots[0]
-                  const nerShort = (latest.ner_model ?? 'sm').replace('zh_core_web_', '')
-                  const strategy = latest.skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
-                  const llmModel = !latest.skip_llm ? (latest.llm_model ?? '') : ''
-                  const ts = new Date(latest.timestamp).toLocaleString('zh-CN', {
+                  // Show active version info, not necessarily the latest snapshot
+                  const activeSnap = (activeVersion && snapshots.find(s => s.version === activeVersion))
+                    ?? snapshots[0]
+                  const nerShort = (activeSnap.ner_model ?? 'sm').replace('zh_core_web_', '')
+                  const strategy = activeSnap.skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
+                  const llmModel = !activeSnap.skip_llm ? (activeSnap.llm_model ?? '') : ''
+                  const ts = new Date(activeSnap.timestamp).toLocaleString('zh-CN', {
                     year: 'numeric', month: '2-digit', day: '2-digit',
                     hour: '2-digit', minute: '2-digit',
                   })
                   return (
                     <div className={styles.currentVersionCard}>
                       <div className={styles.currentVersionRow}>
-                        <span className={styles.currentVersionBadge}>{latest.version}</span>
+                        <span className={styles.currentVersionBadge}>{activeSnap.version}</span>
                         <span className={styles.currentVersionLabel}>当前图谱版本</span>
                         <span className={styles.currentVersionTs}>{ts}</span>
                       </div>
                       <div className={styles.currentVersionRow}>
                         <span className={styles.currentVersionMeta}>构建策略：{strategy}</span>
                         {llmModel && <span className={styles.currentVersionMeta}>LLM：{llmModel}</span>}
-                        <span className={styles.currentVersionMeta}>NER：{latest.ner_model ?? 'zh_core_web_sm'}</span>
+                        <span className={styles.currentVersionMeta}>NER：{activeSnap.ner_model ?? 'zh_core_web_sm'}</span>
                       </div>
                     </div>
                   )
                 })()}
 
-                {/* Stats cards */}
-                <div className={styles.overviewCardGrid}>
-                  {[
-                    { v: overview.node_count.toLocaleString(), k: '实体节点', accent: true },
-                    { v: overview.edge_count.toLocaleString(), k: '关系边', accent: false },
-                    { v: overview.semantic_edge_count.toLocaleString(), k: '语义关系', accent: false },
-                    { v: overview.cooccur_edge_count.toLocaleString(), k: '共现关系', accent: false },
-                    { v: overview.document_count, k: '覆盖文档', accent: false },
-                  ].map(({ v, k, accent }) => (
-                    <div key={k} className={styles.overviewCard}>
-                      <div className={`${styles.overviewCardValue} ${accent ? styles.overviewCardValueAccent : ''}`}>{v}</div>
-                      <div className={styles.overviewCardKey}>{k}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {overview.entity_type_stats.length > 0 && (
-                  <div className={styles.overviewDefaultSection}>
-                    <div className={styles.overviewDefaultSectionTitle}>实体类型分布</div>
-                    {overview.entity_type_stats.map((s) => {
-                      const pct = Math.round(s.count / overview.node_count * 100)
-                      return (
-                        <div key={s.type} className={styles.overviewDefaultRow}>
-                          <div className={styles.overviewDefaultDot} style={{ background: s.color }} />
-                          <span className={styles.overviewDefaultLabel}>{s.label}</span>
-                          <div className={styles.overviewDefaultTrack}>
-                            <div className={styles.overviewDefaultFill} style={{ width: `${pct}%`, background: s.color }} />
-                          </div>
-                          <span className={styles.overviewDefaultCount}>{s.count}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-                {overview.top_relations.length > 0 && (
-                  <div className={styles.overviewDefaultSection}>
-                    <div className={styles.overviewDefaultSectionTitle}>高频语义关系</div>
-                    <div className={styles.overviewDefaultRelList}>
-                      {overview.top_relations.map((r) => (
-                        <div key={r.relation} className={styles.overviewDefaultRelRow}>
-                          <span className={styles.overviewDefaultRelName}>{r.relation}</span>
-                          <span className={styles.overviewDefaultRelCount}>{r.count}</span>
+                {/* Stats + Type distribution + Top relations — 3 columns */}
+                <div className={styles.overviewThreeCols}>
+                  {/* Col 1: stat cards */}
+                  <div className={styles.overviewThreeColCard}>
+                    <div className={styles.overviewDefaultSectionTitle}>统计数据</div>
+                    <div className={styles.overviewCardGridInner}>
+                      {[
+                        { v: overview.node_count.toLocaleString(), k: '实体节点', accent: true },
+                        { v: overview.edge_count.toLocaleString(), k: '关系边', accent: false },
+                        { v: overview.semantic_edge_count.toLocaleString(), k: '语义关系', accent: false },
+                        { v: overview.cooccur_edge_count.toLocaleString(), k: '共现关系', accent: false },
+                        { v: overview.document_count, k: '覆盖文档', accent: false },
+                      ].map(({ v, k, accent }) => (
+                        <div key={k} className={styles.overviewCard}>
+                          <div className={`${styles.overviewCardValue} ${accent ? styles.overviewCardValueAccent : ''}`}>{v}</div>
+                          <div className={styles.overviewCardKey}>{k}</div>
                         </div>
                       ))}
                     </div>
                   </div>
-                )}
+
+                  {/* Col 2: entity type distribution */}
+                  {overview.entity_type_stats.length > 0 && (
+                    <div className={styles.overviewThreeColCard}>
+                      <div className={styles.overviewDefaultSectionTitle}>实体类型分布</div>
+                      <div className={styles.overviewThreeColScroll}>
+                        {overview.entity_type_stats.map((s) => {
+                          const pct = Math.round(s.count / overview.node_count * 100)
+                          return (
+                            <div key={s.type} className={styles.overviewDefaultRow}>
+                              <div className={styles.overviewDefaultDot} style={{ background: s.color }} />
+                              <span className={styles.overviewDefaultLabel}>{s.label}</span>
+                              <div className={styles.overviewDefaultTrack}>
+                                <div className={styles.overviewDefaultFill} style={{ width: `${pct}%`, background: s.color }} />
+                              </div>
+                              <span className={styles.overviewDefaultCount}>{s.count}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Col 3: top relations */}
+                  {overview.top_relations.length > 0 && (
+                    <div className={styles.overviewThreeColCard}>
+                      <div className={styles.overviewDefaultSectionTitle}>高频语义关系</div>
+                      <div className={styles.overviewThreeColScroll}>
+                        {overview.top_relations.map((r) => (
+                          <div key={r.relation} className={styles.overviewDefaultRelRow}>
+                            <span className={styles.overviewDefaultRelName}>{r.relation}</span>
+                            <span className={styles.overviewDefaultRelCount}>{r.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </>
             )}
 

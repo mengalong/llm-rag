@@ -44,6 +44,33 @@ def save_graph() -> None:
         nx.write_graphml(_graph, _graph_path())
 
 
+def _set_graph_version(g: nx.Graph, version: str) -> None:
+    """Embed version tag into graph-level attributes."""
+    g.graph["current_version"] = version
+    g.graph["version_updated_at"] = datetime.now(timezone.utc).isoformat()
+
+
+def get_current_version_from_graph() -> str:
+    """Read the version tag embedded in the in-memory graph."""
+    return get_graph().graph.get("current_version", "unknown")
+
+
+def load_snapshot_as_current(version: str) -> dict[str, Any]:
+    """Replace knowledge_graph.graphml with the given snapshot and reload memory."""
+    global _graph
+    d = _snapshots_dir()
+    snap_files = list(d.glob(f"{version}_*.graphml"))
+    if not snap_files:
+        raise FileNotFoundError(f"Snapshot graphml not found for version: {version}")
+
+    snap_path = snap_files[0]
+    g = nx.read_graphml(str(snap_path))
+    _set_graph_version(g, version)
+    _graph = g
+    nx.write_graphml(_graph, _graph_path())
+    return load_snapshot_meta(version) or {}
+
+
 # ── Snapshot helpers ────────────────────────────────────────────────────────
 
 def _next_version() -> str:
@@ -72,6 +99,11 @@ def save_snapshot(
     graphml_dst = d / f"{stem}.graphml"
     if os.path.exists(graphml_src):
         shutil.copy2(graphml_src, graphml_dst)
+
+    # Embed version tag into both the snapshot graphml and the live graphml
+    _set_graph_version(g, version)
+    nx.write_graphml(g, graphml_dst)   # snapshot with version tag
+    nx.write_graphml(g, graphml_src)   # live file updated too
 
     # count semantic edges
     semantic = sum(

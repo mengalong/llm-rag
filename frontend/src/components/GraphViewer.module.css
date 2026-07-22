@@ -472,7 +472,49 @@
   padding: 3px 10px;
 }
 
-/* Stats card grid — Pinterest-like cards */
+.overviewThreeCols {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+@media (max-width: 900px) {
+  .overviewThreeCols { grid-template-columns: 1fr; }
+}
+
+/* Explicit card frame for each column */
+.overviewThreeColCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollable content area — no fixed max-height, only caps at viewport limit */
+.overviewThreeColScroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  max-height: 60vh;
+}
+.overviewThreeColScroll::-webkit-scrollbar { width: 3px; }
+.overviewThreeColScroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Stats sub-grid inside col 1 */
+.overviewCardGridInner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .overviewCardGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
@@ -826,6 +868,32 @@
 .snapshotItem:hover { background: var(--surface-hover); }
 .snapshotItemV1 { border-color: var(--accent); background: var(--accent-subtle); }
 .snapshotItemV2 { border-color: #34d399; background: rgba(52,211,153,0.1); }
+.snapshotItemActive { border-color: #34d399; background: rgba(52,211,153,0.08); }
+
+.snapshotActiveBadge {
+  font-size: 10px;
+  background: #34d399;
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.snapshotLoadBtn {
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 10px;
+  font-family: inherit;
+  padding: 1px 6px;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.snapshotLoadBtn:not(:disabled):hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.snapshotLoadBtn:disabled { opacity: 0.5; cursor: default; }
 
 .snapshotMain {
   display: flex;
