@@ -6,6 +6,7 @@ import {
   type DebugRecordSummary, type DebugRecord,
   debugQueryStream, getDebugRecords, getDebugRecord, deleteDebugRecord
 } from '../api/client'
+import { useSidebar } from '../context/SidebarContext'
 import styles from './DebugPage.module.css'
 
 const TYPE_COLOR: Record<string, string> = {
@@ -64,7 +65,48 @@ function NodeRow({ node }: { node: MatchedGraphNode }) {
   )
 }
 
+interface DebugPageProps {
+  records: DebugRecordSummary[]
+  selectedRecordId: string | null
+  onSelectRecord: (id: string) => void
+  onDeleteRecord: (id: string, e: React.MouseEvent) => void
+}
+
+export function DebugSidebarList({ records, selectedRecordId, onSelectRecord, onDeleteRecord }: DebugPageProps) {
+  return (
+    <div className={styles.historySidebar} style={{ height: '100%' }}>
+      <div className={styles.historyHeader}>调试历史 <span className={styles.historyCount}>{records.length}</span></div>
+      <div className={styles.historyList}>
+        {records.length === 0 && <div className={styles.historyEmpty}>暂无记录</div>}
+        {records.map(r => {
+          const nerShort = (r.graph_ner_model ?? 'sm').replace('zh_core_web_', '')
+          const strategy = r.graph_skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
+          const llmShort = (r.qa_llm_model ?? '').split(/[\s/-]/).pop() ?? ''
+          const ts = new Date(r.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+          return (
+            <div
+              key={r.id}
+              className={`${styles.historyItem} ${selectedRecordId === r.id ? styles.historyItemActive : ''}`}
+              onClick={() => onSelectRecord(r.id)}
+            >
+              <div className={styles.historyItemQ}>{r.question.slice(0, 22)}{r.question.length > 22 ? '…' : ''}</div>
+              <div className={styles.historyItemMeta}>
+                <span className={styles.historyVerBadge}>{r.graph_version}</span>
+                <span className={styles.historyStrategy}>{strategy}</span>
+                <span className={styles.historyLlm}>{llmShort}</span>
+              </div>
+              <div className={styles.historyItemTs}>{ts}</div>
+              <button className={styles.historyDel} onClick={(e) => onDeleteRecord(r.id, e)} title="删除">×</button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export default function DebugPage() {
+  const { setSidebarContent } = useSidebar()
   const [question, setQuestion] = useState('')
   const [topK, setTopK] = useState(5)
   const [loading, setLoading] = useState(false)
@@ -82,16 +124,13 @@ export default function DebugPage() {
     graph_strategy: string; qa_llm_model: string; record_id: string
   } | null>(null)
 
-  // History
+  // History — self-contained, sidebar injected via Context
   const [records, setRecords] = useState<DebugRecordSummary[]>([])
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
   const [recordDetail, setRecordDetail] = useState<DebugRecord | null>(null)
 
   const loadRecords = useCallback(async () => {
-    try {
-      const r = await getDebugRecords()
-      setRecords(r.data)
-    } catch { /* ignore */ }
+    try { const r = await getDebugRecords(); setRecords(r.data) } catch { /* ignore */ }
   }, [])
 
   useEffect(() => { loadRecords() }, [loadRecords])
@@ -209,40 +248,27 @@ export default function DebugPage() {
 
   useEffect(() => () => { esRef.current?.close() }, [])
 
+  // Inject sidebar
+  useEffect(() => {
+    setSidebarContent(
+      <DebugSidebarList
+        records={records}
+        selectedRecordId={selectedRecordId}
+        onSelectRecord={id => selectRecord(id)}
+        onDeleteRecord={async (id, e) => {
+          e.stopPropagation()
+          await deleteDebugRecord(id).catch(() => {})
+          setRecords(prev => prev.filter(r => r.id !== id))
+          if (selectedRecordId === id) { setSelectedRecordId(null); setRecordDetail(null); setRetrieval(null); setAnswerWith(''); setAnswerWithout(''); setSessionMeta(null) }
+        }}
+      />
+    )
+    return () => setSidebarContent(null)
+  }, [records, selectedRecordId])
+
   return (
     <div className={styles.page}>
-      {/* Left sidebar: history */}
-      <div className={styles.historySidebar}>
-        <div className={styles.historyHeader}>调试历史 <span className={styles.historyCount}>{records.length}</span></div>
-        <div className={styles.historyList}>
-          {records.length === 0 && <div className={styles.historyEmpty}>暂无记录</div>}
-          {records.map(r => {
-            const nerShort = (r.graph_ner_model ?? 'sm').replace('zh_core_web_', '')
-            const strategy = r.graph_skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
-            const llmShort = (r.qa_llm_model ?? '').split(/[\s/-]/).pop() ?? ''
-            const ts = new Date(r.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-            return (
-              <div
-                key={r.id}
-                className={`${styles.historyItem} ${selectedRecordId === r.id ? styles.historyItemActive : ''}`}
-                onClick={() => selectRecord(r.id)}
-              >
-                <div className={styles.historyItemQ}>{r.question.slice(0, 22)}{r.question.length > 22 ? '…' : ''}</div>
-                <div className={styles.historyItemMeta}>
-                  <span className={styles.historyVerBadge}>{r.graph_version}</span>
-                  <span className={styles.historyStrategy}>{strategy}</span>
-                  <span className={styles.historyLlm}>{llmShort}</span>
-                </div>
-                <div className={styles.historyItemTs}>{ts}</div>
-                <button className={styles.historyDel} onClick={(e) => handleDeleteRecord(r.id, e)} title="删除">×</button>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Right: input + results */}
-      <div className={styles.mainArea}>
+      <div className={styles.mainArea} style={{ flex: 1 }}>
         {/* Input */}
         <div className={styles.inputArea}>
         <input

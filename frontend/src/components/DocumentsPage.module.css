@@ -101,23 +101,57 @@
 }
 .strategyParams input:focus { border-color: var(--accent); }
 
-/* ── Body ── */
-.body {
+/* ── Body: no left pane, full-width detail ── */
+.page {
   display: flex;
-  flex: 1;
-  min-height: 0;
+  flex-direction: column;
+  height: 100%;
   overflow: hidden;
 }
 
-/* ── Doc list pane ── */
-.listPane {
-  width: 320px;
-  min-width: 260px;
-  border-right: 1px solid var(--border);
+/* ── Sidebar doc list (rendered in App globalSidebar) ── */
+.sidebarDocList {
   display: flex;
   flex-direction: column;
+  height: 100%;
   overflow: hidden;
 }
+.sidebarUpload {
+  margin: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.sidebarUpload:hover, .dragOver { border-color: var(--accent); color: var(--text); background: var(--accent-subtle); }
+.uploading { cursor: default; border-color: var(--accent); }
+.sidebarDocLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 6px 10px 4px;
+  font-weight: 600;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.sidebarDocCount {
+  font-size: 10px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 1px 5px;
+}
+
 .listScroll {
   flex: 1;
   overflow-y: auto;
@@ -170,12 +204,12 @@
 .docDel:hover { color: #ef4444 !important; }
 .emptyList { text-align: center; padding: 40px 16px; color: var(--text-muted); font-size: 13px; }
 
-/* ── Detail pane ── */
+/* Detail pane — full width */
 .detailPane {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column;
   overflow: hidden;
-  min-height: 0;        /* ensure the pane itself can shrink */
+  min-height: 0;
 }
 .detailHeader {
   display: flex; align-items: center; gap: 10px;

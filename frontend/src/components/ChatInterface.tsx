@@ -3,14 +3,29 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useSSEQuery } from '../hooks/useSSE'
 import SourcePanel from './SourcePanel'
+import SessionList from './SessionList'
 import GraphEntityModal from './GraphEntityModal'
+import { useSidebar } from '../context/SidebarContext'
 import { type ChatSession, type GraphPath, generateSessionTitle } from '../api/sessions'
 import styles from './ChatInterface.module.css'
+
+function SessionListSidebar({ sessions, activeId, onSelect, onNew, onDelete }: {
+  sessions: ChatSession[]; activeId: string
+  onSelect: (id: string) => void; onNew: () => void; onDelete: (id: string) => void
+}) {
+  return <SessionList sessions={sessions} activeId={activeId} onSelect={onSelect} onNew={onNew} onDelete={onDelete} />
+}
+
 
 interface Props {
   session: ChatSession
   onSessionUpdate: (s: ChatSession) => void
   onSessionTitleUpdate: (id: string, title: string) => void
+  sessions: ChatSession[]
+  activeSessionId: string
+  onSessionSelect: (id: string) => void
+  onNewSession: () => void
+  onDeleteSession: (id: string) => void
 }
 
 /** Robot avatar for AI messages */
@@ -131,7 +146,24 @@ function MarkdownWithCitations({ content, onCite, raw }: MarkdownWithCitationsPr
   )
 }
 
-export default function ChatInterface({ session, onSessionUpdate, onSessionTitleUpdate }: Props) {
+export default function ChatInterface({
+  session, onSessionUpdate, onSessionTitleUpdate,
+  sessions, activeSessionId, onSessionSelect, onNewSession, onDeleteSession,
+}: Props) {
+  const { setSidebarContent } = useSidebar()
+
+  useEffect(() => {
+    setSidebarContent(
+      <SessionListSidebar
+        sessions={sessions}
+        activeId={activeSessionId}
+        onSelect={onSessionSelect}
+        onNew={onNewSession}
+        onDelete={onDeleteSession}
+      />
+    )
+    return () => setSidebarContent(null)
+  }, [sessions, activeSessionId, onSessionSelect, onNewSession, onDeleteSession])
   const [input, setInput] = useState('')
   const [useGraph, setUseGraph] = useState(true)
   const [rawMsgIds, setRawMsgIds] = useState<Set<number>>(new Set())

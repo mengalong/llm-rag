@@ -7,13 +7,11 @@ interface Props {
   onSelect: (id: string) => void
   onNew: () => void
   onDelete: (id: string) => void
-  theme: 'dark' | 'light'
-  onToggleTheme: () => void
 }
 
-export default function SessionList({ sessions, activeId, onSelect, onNew, onDelete, theme, onToggleTheme }: Props) {
+export default function SessionList({ sessions, activeId, onSelect, onNew, onDelete }: Props) {
   return (
-    <div className={styles.sidebar}>
+    <div className={styles.sessionContent}>
       <button className={styles.newBtn} onClick={onNew}>＋ 新建对话</button>
       <div className={styles.label}>历史对话</div>
       <div className={styles.list}>
@@ -32,11 +30,6 @@ export default function SessionList({ sessions, activeId, onSelect, onNew, onDel
             >×</button>
           </div>
         ))}
-      </div>
-      <div className={styles.bottom}>
-        <button className={styles.themeBtn} onClick={onToggleTheme}>
-          {theme === 'dark' ? '切换亮色模式' : '切换暗色模式'}
-        </button>
       </div>
     </div>
   )

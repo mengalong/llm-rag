@@ -1,10 +1,7 @@
-.sidebar {
-  width: 220px;
-  min-width: 180px;
-  background: var(--sidebar-bg);
-  border-right: 1px solid var(--border);
+.sessionContent {
   display: flex;
   flex-direction: column;
+  height: 100%;
   overflow: hidden;
   padding: 8px 8px 12px;
 }
@@ -61,24 +58,7 @@
   font-size: 13px;
   transition: background 0.15s;
   margin-bottom: 6px;
-}
-.bottom {
-  padding: 8px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.themeBtn {
-  display: block;
-  width: 100%;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius, 8px);
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 12px;
   font-family: inherit;
-  padding: 6px 10px;
-  text-align: left;
-  transition: background 0.15s, color 0.15s;
 }
-.themeBtn:hover { background: var(--surface); color: var(--text); }
+.newBtn:hover { background: var(--surface); }
+
