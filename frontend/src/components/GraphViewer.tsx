@@ -176,29 +176,18 @@ export default function GraphViewer({ docs }: Props) {
   }, [snapshots, activeVersion, diffV1, diffV2, diffLoading, diffResult, searchResult, searching,
       indexedDocs, selectedDocId, filterType, docGraphData, groupedEntities, usedTypes, entities, subgraphData])
 
-  const showOverview = !selectedDocId && overview !== null
-
+  // Right panel always shows overview — selecting a doc/entity doesn't replace it
   return (
-    <div className={styles.content} style={{ flex: 1, minWidth: 0 }}>
-      {showOverview && (
-        <GraphOverviewPanel overview={overview!} categories={categories} snapshots={snapshots}
+    <div className={styles.content} style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
+      {overview && (
+        <GraphOverviewPanel overview={overview} categories={categories} snapshots={snapshots}
           activeVersion={activeVersion} diffV1={diffV1} diffV2={diffV2} diffResult={diffResult}
           onEntityClick={handleEntityClick} />
       )}
       {diffResult && <GraphDiffPanel diffResult={diffResult} onEntityClick={handleEntityClick} />}
-      {selectedDocId && loading && <div className={styles.empty}>加载中...</div>}
-      {selectedDocId && !loading && docGraphData?.nodes.length === 0 && <div className={styles.empty}>该文档暂无图谱数据</div>}
-      {selectedDocId && !loading && !subgraphData && docGraphData && docGraphData.nodes.length > 0 && <div className={styles.empty}>← 点击左侧实体展开关系图</div>}
-      {selectedDocId && !loading && subgraphData && (
-        <>
-          <div className={styles.subgraphHeader}>
-            <span className={styles.subgraphTitle}>「{subgraphData.nodes[0]?.label ?? ''}」周边关系</span>
-            <button className={styles.resetBtn} onClick={() => setSubgraphData(null)}>← 返回</button>
-          </div>
-          <GraphCanvas data={subgraphData} onNodeClick={handleEntityClick} />
-        </>
+      {!overview && !diffResult && (
+        <div className={styles.empty}>从左侧搜索实体或选择文档查看图谱</div>
       )}
-      {!selectedDocId && !overview && <div className={styles.empty}>从左侧搜索实体或选择文档查看图谱</div>}
       {modalEntity && <GraphEntityModal entity={modalEntity} onClose={() => setModalEntity(null)} />}
       {toast && <div className={styles.updateToast}>{toast}</div>}
     </div>
