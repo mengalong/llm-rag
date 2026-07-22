@@ -13,6 +13,60 @@ interface Props {
   onSessionTitleUpdate: (id: string, title: string) => void
 }
 
+/** Robot avatar for AI messages */
+function BotAvatar() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <circle cx="16" cy="16" r="16" fill="#6366f1"/>
+      {/* antenna */}
+      <line x1="16" y1="4" x2="16" y2="9" stroke="#c7d2fe" strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="16" cy="3.5" r="1.5" fill="#c7d2fe"/>
+      {/* head box */}
+      <rect x="8" y="10" width="16" height="13" rx="3" fill="#fff" fillOpacity="0.15" stroke="#c7d2fe" strokeWidth="1.2"/>
+      {/* eyes */}
+      <circle cx="12.5" cy="15.5" r="2" fill="#c7d2fe"/>
+      <circle cx="19.5" cy="15.5" r="2" fill="#c7d2fe"/>
+      <circle cx="12.5" cy="15.5" r="0.8" fill="#6366f1"/>
+      <circle cx="19.5" cy="15.5" r="0.8" fill="#6366f1"/>
+      {/* mouth */}
+      <path d="M13 19.5 Q16 21.5 19 19.5" stroke="#c7d2fe" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
+      {/* ears */}
+      <rect x="5.5" y="14" width="2.5" height="5" rx="1.2" fill="#c7d2fe"/>
+      <rect x="24" y="14" width="2.5" height="5" rx="1.2" fill="#c7d2fe"/>
+    </svg>
+  )
+}
+
+/** User avatar — cheerful orange fox character */
+function UserAvatar() {
+  return (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <circle cx="16" cy="16" r="16" fill="#f97316"/>
+      {/* ears */}
+      <polygon points="7,14 11,7 13,14" fill="#fb923c"/>
+      <polygon points="19,14 21,7 25,14" fill="#fb923c"/>
+      <polygon points="8.5,13.5 11,8.5 12.5,13.5" fill="#fde68a"/>
+      <polygon points="19.5,13.5 21,8.5 23.5,13.5" fill="#fde68a"/>
+      {/* face */}
+      <circle cx="16" cy="17" r="7" fill="#fdba74"/>
+      {/* muzzle */}
+      <ellipse cx="16" cy="20" rx="3.5" ry="2.5" fill="#fed7aa"/>
+      {/* eyes */}
+      <circle cx="13" cy="15.5" r="1.8" fill="#1c1917"/>
+      <circle cx="19" cy="15.5" r="1.8" fill="#1c1917"/>
+      <circle cx="13.6" cy="14.9" r="0.6" fill="#fff"/>
+      <circle cx="19.6" cy="14.9" r="0.6" fill="#fff"/>
+      {/* nose */}
+      <ellipse cx="16" cy="19" rx="1" ry="0.7" fill="#9a3412"/>
+      {/* smile */}
+      <path d="M14 20.8 Q16 22.2 18 20.8" stroke="#9a3412" strokeWidth="0.8" strokeLinecap="round" fill="none"/>
+      {/* cheeks */}
+      <circle cx="11.5" cy="18" r="1.5" fill="#fb923c" fillOpacity="0.5"/>
+      <circle cx="20.5" cy="18" r="1.5" fill="#fb923c" fillOpacity="0.5"/>
+    </svg>
+  )
+}
+
 /** Normalize model output before feeding to ReactMarkdown:
  *  1. Strip newlines that appear immediately before a [N] citation so they stay inline
  *  2. Collapse multiple blank lines inside list blocks to prevent loose-list wrapping
@@ -178,8 +232,10 @@ export default function ChatInterface({ session, onSessionUpdate, onSessionTitle
         </div>
       ) : (
         <div className={styles.messages}>
+          <div className={styles.messagesInner}>
           {session.messages.map((msg, i) => (
             <div key={i} className={`${styles.msgRow} ${msg.role === 'user' ? styles.user : ''}`}>
+              {msg.role === 'assistant' && <BotAvatar />}
               <div className={`${styles.bubble} ${styles[msg.role]}`}>
                 {msg.role === 'assistant' && msg.graphEntities && msg.graphEntities.length > 0 && (
                   <div className={styles.entities}>
@@ -247,12 +303,14 @@ export default function ChatInterface({ session, onSessionUpdate, onSessionTitle
                   />
                 )}
               </div>
+              {msg.role === 'user' && <UserAvatar />}
             </div>
           ))}
 
-          {/* Streaming assistant reply — only show while streaming, disappears once saved to session */}
+          {/* Streaming assistant reply */}
           {(loading || answer) && (
             <div className={styles.msgRow}>
+              <BotAvatar />
               <div className={`${styles.bubble} ${styles.assistant}`}>
                 {loading && !answer && (
                   <div className={styles.thinking}>
@@ -280,6 +338,7 @@ export default function ChatInterface({ session, onSessionUpdate, onSessionTitle
 
           {error && <div className={styles.error}>{error}</div>}
           <div ref={bottomRef} />
+          </div>
         </div>
       )}
 
