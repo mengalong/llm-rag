@@ -87,8 +87,13 @@ async def main(skip_llm: bool = False):
 
     # Save a snapshot after successful rebuild
     from app.core.graph_store import save_snapshot
+    from app.core.graph_config import graph_cfg
     doc_names = [d.filename for d in indexed]
-    version = save_snapshot(skip_llm=skip_llm, documents=doc_names)
+    version = save_snapshot(
+        skip_llm=skip_llm,
+        documents=doc_names,
+        ner_model=graph_cfg.ner_model,
+    )
     logger.info("Snapshot saved: %s", version)
 
 

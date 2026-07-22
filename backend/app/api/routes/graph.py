@@ -22,6 +22,45 @@ TYPE_COLOR = {
 }
 
 
+@router.get("/current-version")
+async def current_graph_version():
+    """Return current loaded graph version by comparing graphml mtime with snapshots."""
+    import os
+    from datetime import datetime, timezone
+    from ...core.graph_config import graph_cfg
+
+    graphml_path = os.path.join(settings.graph_dir, "knowledge_graph.graphml")
+    snapshots = list_snapshots()
+
+    version = "v0"
+    graph_ner_model = ""
+    graph_llm_model = None
+    graph_skip_llm = True
+    node_count = 0
+
+    if snapshots:
+        latest = snapshots[0]
+        graphml_mtime = os.path.getmtime(graphml_path) if os.path.exists(graphml_path) else 0
+        snap_ts = datetime.fromisoformat(latest["timestamp"].replace("Z", "+00:00")).timestamp()
+        if graphml_mtime <= snap_ts + 5:  # 5s tolerance
+            version = latest["version"]
+        else:
+            version = "unsaved"
+        graph_ner_model = latest.get("ner_model", "")
+        graph_llm_model = latest.get("llm_model")
+        graph_skip_llm = bool(latest.get("skip_llm", True))
+        node_count = latest.get("node_count", 0)
+
+    return {
+        "version": version,
+        "node_count": node_count,
+        "graph_ner_model": graph_ner_model,
+        "graph_llm_model": graph_llm_model,
+        "graph_skip_llm": graph_skip_llm,
+        "graph_strategy": graph_cfg.builder_strategy,
+    }
+
+
 @router.get("/overview", response_model=GraphOverview)
 async def graph_overview():
     g = get_graph()

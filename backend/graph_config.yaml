@@ -60,9 +60,9 @@ entity_filter:
     - str
     - int
     - bool
-    - true
-    - false
-    - null
+    - "true"
+    - "false"
+    - "null"
     - none
     - self
     - this

@@ -219,7 +219,15 @@ async def debug_query_stream(question: str, top_k: int = 5):
                         matched_by="",
                     ))
 
-        # Emit retrieval info immediately
+        # Emit retrieval info immediately (include contexts for frontend display)
+        hits_with = vector_hits_raw + graph_extra
+        hits_without = vector_hits_raw
+        sources_with = build_sources_from_hits(hits_with)
+        sources_without = build_sources_from_hits(hits_without)
+        ctx_with = _build_context(sources_with)
+        ctx_without = _build_context(sources_without)
+        sys_prompt = _build_system_prompt()
+
         retrieval_event = json.dumps({
             "type": "retrieval",
             "ner_entities": ner_entities,
@@ -228,20 +236,19 @@ async def debug_query_stream(question: str, top_k: int = 5):
             "graph_paths": [p.model_dump() for p in graph_paths],
             "vector_hits": [h.model_dump() for h in vector_hits],
             "graph_hits": [h.model_dump() for h in graph_hits],
+            "context_with_graph": ctx_with,
+            "context_without_graph": ctx_without,
+            "system_prompt": sys_prompt,
         })
         yield f"data: {retrieval_event}\n\n"
 
-        # Step 2: stream both LLM answers concurrently via asyncio queues
-        hits_with = vector_hits_raw + graph_extra
-        hits_without = vector_hits_raw
-        sources_with = build_sources_from_hits(hits_with)
-        sources_without = build_sources_from_hits(hits_without)
-        ctx_with = _build_context(sources_with)
-        ctx_without = _build_context(sources_without)
-
+        # Step 2: stream LLM answers — if no graph expansion, reuse one call
+        same_context = not graph_extra
         import asyncio
         queue_with: asyncio.Queue = asyncio.Queue()
         queue_without: asyncio.Queue = asyncio.Queue()
+        answer_with_acc = ""
+        answer_without_acc = ""
 
         async def stream_to_queue(ctx: str, q: asyncio.Queue, label: str):
             async for token in _stream_llm(question, ctx):
@@ -249,12 +256,14 @@ async def debug_query_stream(question: str, top_k: int = 5):
             await q.put({"label": label, "done": True})
 
         asyncio.create_task(stream_to_queue(ctx_with, queue_with, "with_graph"))
-        asyncio.create_task(stream_to_queue(ctx_without, queue_without, "without_graph"))
+        if same_context:
+            asyncio.create_task(_mirror_queue(queue_with, queue_without))
+        else:
+            asyncio.create_task(stream_to_queue(ctx_without, queue_without, "without_graph"))
 
         done_with = False
         done_without = False
         while not (done_with and done_without):
-            # drain both queues each iteration
             for q, flag_attr in [(queue_with, "done_with"), (queue_without, "done_without")]:
                 try:
                     item = q.get_nowait()
@@ -264,17 +273,91 @@ async def debug_query_stream(question: str, top_k: int = 5):
                         else:
                             done_without = True
                     else:
-                        yield f"data: {json.dumps({'type': 'token', 'label': item['label'], 'token': item['token']})}\n\n"
+                        tok = item.get("token", "")
+                        lbl = item.get("label", "")
+                        if lbl == "with_graph":
+                            answer_with_acc += tok
+                        else:
+                            answer_without_acc += tok
+                        yield f"data: {json.dumps({'type': 'token', 'label': lbl, 'token': tok})}\n\n"
                 except asyncio.QueueEmpty:
                     pass
             if not (done_with and done_without):
                 await asyncio.sleep(0.01)
 
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        # Collect full answers from queues (already drained above via mirror/stream)
+        # Save record to DB
+        from ...db.debug_store import DebugRecordStore
+        from ...core.graph_store import list_snapshots
+        import os as _os
+
+        # Determine current graph version info
+        try:
+            from ...core.graph_config import graph_cfg as _gcfg
+            _snaps = list_snapshots()
+            _graphml = _os.path.join(settings.graph_dir, "knowledge_graph.graphml")
+            _gversion, _gner, _gllm, _gskip, _gstrat = "v0", "", None, True, _gcfg.builder_strategy
+            if _snaps:
+                _latest = _snaps[0]
+                from datetime import datetime, timezone as _tz
+                _gmtime = _os.path.getmtime(_graphml) if _os.path.exists(_graphml) else 0
+                _sts = datetime.fromisoformat(_latest["timestamp"].replace("Z", "+00:00")).timestamp()
+                _gversion = _latest["version"] if _gmtime <= _sts + 5 else "unsaved"
+                _gner = _latest.get("ner_model", "")
+                _gllm = _latest.get("llm_model")
+                _gskip = bool(_latest.get("skip_llm", True))
+        except Exception:
+            _gversion, _gner, _gllm, _gskip, _gstrat = "unknown", "", None, True, "ner_llm"
+
+        # Collect accumulated answers
+        _ans_with = answer_with_acc
+        _ans_without = answer_without_acc
+
+        try:
+            store = DebugRecordStore(settings.db_path)
+            await store.init()
+            record_id = await store.create({
+                "question": question,
+                "top_k": top_k,
+                "graph_version": _gversion,
+                "graph_ner_model": _gner,
+                "graph_llm_model": _gllm or "",
+                "graph_skip_llm": _gskip,
+                "graph_strategy": _gstrat,
+                "qa_llm_model": settings.llm_model,
+                "qa_llm_base_url": settings.llm_base_url,
+                "ner_entities": ner_entities,
+                "fuzzy_entities": fuzzy_entities,
+                "matched_graph_nodes": [n.model_dump() for n in matched_nodes],
+                "graph_paths": [p.model_dump() for p in graph_paths],
+                "vector_hits": [h.model_dump() for h in vector_hits],
+                "graph_hits": [h.model_dump() for h in graph_hits],
+                "answer_with_graph": _ans_with,
+                "answer_without_graph": _ans_without,
+                "context_with_graph": ctx_with,
+                "context_without_graph": ctx_without,
+                "system_prompt": sys_prompt,
+            })
+        except Exception:
+            record_id = ""
+
+        yield f"data: {json.dumps({'type': 'done', 'record_id': record_id, 'graph_version': _gversion, 'graph_ner_model': _gner, 'graph_llm_model': _gllm, 'graph_strategy': _gstrat, 'qa_llm_model': settings.llm_model})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+async def _mirror_queue(src: asyncio.Queue, dst: asyncio.Queue) -> None:
+    """Copy items from src to dst, relabelling tokens to 'without_graph'."""
+    while True:
+        item = await src.get()
+        if item.get("done"):
+            await dst.put({"label": "without_graph", "done": True})
+            break
+        await dst.put({"label": "without_graph", "token": item.get("token", "")})
+
+
+@router.post("/debug", response_model=DebugResult)
+async def debug_query(req: DebugRequest):
     from ...core.embedder import get_embedder
     from ...core.vector_store import search
     from ...core.rag_engine import build_sources_from_hits
@@ -346,17 +429,25 @@ async def debug_query_stream(question: str, top_k: int = 5):
                     matched_by="",
                 ))
 
-    # Call LLM twice concurrently: with graph and without graph
+    # Call LLM — if no graph expansion, reuse one call to avoid misleading diff
     hits_with_graph = vector_hits_raw + graph_extra
     hits_without_graph = vector_hits_raw
 
     sources_with = build_sources_from_hits(hits_with_graph)
     sources_without = build_sources_from_hits(hits_without_graph)
+    ctx_with = _build_context(sources_with)
+    ctx_without = _build_context(sources_without)
+    sys_prompt = _build_system_prompt()
 
-    answer_with, answer_without = await asyncio.gather(
-        _call_llm(req.question, _build_context(sources_with)),
-        _call_llm(req.question, _build_context(sources_without)),
-    )
+    if not graph_extra:
+        # Context identical — one LLM call, reuse result for both columns
+        answer_with = await _call_llm(req.question, ctx_with)
+        answer_without = answer_with
+    else:
+        answer_with, answer_without = await asyncio.gather(
+            _call_llm(req.question, ctx_with),
+            _call_llm(req.question, ctx_without),
+        )
 
     return DebugResult(
         question=req.question,
@@ -369,6 +460,9 @@ async def debug_query_stream(question: str, top_k: int = 5):
         final_hits=vector_hits + graph_hits,
         answer_with_graph=answer_with,
         answer_without_graph=answer_without,
+        context_with_graph=ctx_with,
+        context_without_graph=ctx_without,
+        system_prompt=sys_prompt,
     )
 
 

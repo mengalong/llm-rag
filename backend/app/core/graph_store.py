@@ -78,6 +78,7 @@ def save_snapshot(
         1 for _, _, data in g.edges(data=True)
         if data.get("relation", "co-occurs") != "co-occurs"
     )
+    cooccur = g.number_of_edges() - semantic
 
     meta: dict[str, Any] = {
         "version": version,
@@ -89,6 +90,7 @@ def save_snapshot(
         "node_count": g.number_of_nodes(),
         "edge_count": g.number_of_edges(),
         "semantic_edge_count": semantic,
+        "cooccur_edge_count": cooccur,
         "document_count": len(documents),
         "documents": documents,
         "note": note,
@@ -176,8 +178,9 @@ def diff_snapshots(v1: str, v2: str) -> dict[str, Any]:
         "added_count": len(added_labels),
         "removed_count": len(removed_labels),
         "unchanged_count": len(labels1 & labels2),
-        "added_nodes":   [{"label": l, "type": nodes2[l]} for l in sorted(added_labels)],
-        "removed_nodes": [{"label": l, "type": nodes1[l]} for l in sorted(removed_labels)],
+        "added_nodes":     [{"label": l, "type": nodes2[l]} for l in sorted(added_labels)],
+        "removed_nodes":   [{"label": l, "type": nodes1[l]} for l in sorted(removed_labels)],
+        "unchanged_nodes": [{"label": l, "type": nodes1[l]} for l in sorted(labels1 & labels2)],
     }
 
 

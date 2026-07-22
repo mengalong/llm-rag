@@ -23,6 +23,9 @@ async def lifespan(app: FastAPI):
     logger.info("Embedding backend=%s model=%s", settings.embedding_backend, settings.embedding_model)
     store = FileStore(settings.db_path)
     await store.init()
+    from .db.debug_store import DebugRecordStore
+    debug_store = DebugRecordStore(settings.db_path)
+    await debug_store.init()
     logger.info("Database initialized at %s", settings.db_path)
     yield
     logger.info("Shutting down")

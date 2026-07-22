@@ -61,3 +61,6 @@ class DebugResult(BaseModel):
     final_hits: list[DebugHit]
     answer_with_graph: str
     answer_without_graph: str
+    context_with_graph: str = ""
+    context_without_graph: str = ""
+    system_prompt: str = ""
