@@ -152,7 +152,7 @@ def load_snapshot_meta(version: str) -> dict[str, Any] | None:
 
 
 def _extract_nodes_from_graphml(path: Path) -> dict[str, str]:
-    """Fast XML parse: returns {label_lower: type} without loading into NetworkX."""
+    """Fast XML parse: returns {label_lower: original_label} for diff comparison."""
     import xml.etree.ElementTree as ET
     if not path.exists():
         return {}
@@ -161,7 +161,6 @@ def _extract_nodes_from_graphml(path: Path) -> dict[str, str]:
     ns = root.tag.split("}")[0].lstrip("{") if "}" in root.tag else ""
     prefix = f"{{{ns}}}" if ns else ""
 
-    # find key ids for label and type
     label_key = type_key = None
     for key in root.iter(f"{prefix}key"):
         if key.attrib.get("attr.name") == "label":
@@ -169,17 +168,18 @@ def _extract_nodes_from_graphml(path: Path) -> dict[str, str]:
         if key.attrib.get("attr.name") == "type":
             type_key = key.attrib.get("id")
 
-    nodes: dict[str, str] = {}
+    # {label_lower: (original_label, type)}
+    nodes: dict[str, tuple[str, str]] = {}
     for node in root.iter(f"{prefix}node"):
-        label = entity_type = ""
+        orig_label = entity_type = ""
         for data in node.iter(f"{prefix}data"):
             k = data.attrib.get("key", "")
             if k == label_key:
-                label = (data.text or "").strip().lower()
+                orig_label = (data.text or "").strip()
             elif k == type_key:
                 entity_type = (data.text or "").strip()
-        if label:
-            nodes[label] = entity_type
+        if orig_label:
+            nodes[orig_label.lower()] = (orig_label, entity_type)
     return nodes
 
 
@@ -210,9 +210,9 @@ def diff_snapshots(v1: str, v2: str) -> dict[str, Any]:
         "added_count": len(added_labels),
         "removed_count": len(removed_labels),
         "unchanged_count": len(labels1 & labels2),
-        "added_nodes":     [{"label": l, "type": nodes2[l]} for l in sorted(added_labels)],
-        "removed_nodes":   [{"label": l, "type": nodes1[l]} for l in sorted(removed_labels)],
-        "unchanged_nodes": [{"label": l, "type": nodes1[l]} for l in sorted(labels1 & labels2)],
+        "added_nodes":     [{"label": nodes2[l][0], "type": nodes2[l][1]} for l in sorted(added_labels)],
+        "removed_nodes":   [{"label": nodes1[l][0], "type": nodes1[l][1]} for l in sorted(removed_labels)],
+        "unchanged_nodes": [{"label": nodes1[l][0], "type": nodes1[l][1]} for l in sorted(labels1 & labels2)],
     }
 
 

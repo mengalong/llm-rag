@@ -62,7 +62,10 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
     if (!containerRef.current || !data || data.nodes.length === 0) return
 
     // Find the focal node — prefer exact label match, fall back to first node
-    const focalId = data.nodes.find(n => n.label === currentEntity)?.id ?? data.nodes[0]?.id
+    const focalId = (
+      data.nodes.find(n => n.label === currentEntity) ??
+      data.nodes.find(n => n.label.toLowerCase() === currentEntity.toLowerCase())
+    )?.id ?? data.nodes[0]?.id
 
     const elements = [
       ...data.nodes.map((n) => ({
