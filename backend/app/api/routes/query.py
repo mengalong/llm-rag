@@ -291,21 +291,16 @@ async def debug_query_stream(question: str, top_k: int = 5):
         from ...core.graph_store import list_snapshots
         import os as _os
 
-        # Determine current graph version info
+        # Determine current graph version info — read from embedded tag in graphml
         try:
             from ...core.graph_config import graph_cfg as _gcfg
-            _snaps = list_snapshots()
-            _graphml = _os.path.join(settings.graph_dir, "knowledge_graph.graphml")
-            _gversion, _gner, _gllm, _gskip, _gstrat = "v0", "", None, True, _gcfg.builder_strategy
-            if _snaps:
-                _latest = _snaps[0]
-                from datetime import datetime, timezone as _tz
-                _gmtime = _os.path.getmtime(_graphml) if _os.path.exists(_graphml) else 0
-                _sts = datetime.fromisoformat(_latest["timestamp"].replace("Z", "+00:00")).timestamp()
-                _gversion = _latest["version"] if _gmtime <= _sts + 5 else "unsaved"
-                _gner = _latest.get("ner_model", "")
-                _gllm = _latest.get("llm_model")
-                _gskip = bool(_latest.get("skip_llm", True))
+            from ...core.graph_store import get_current_version_from_graph, load_snapshot_meta
+            _gversion = get_current_version_from_graph()
+            _meta = load_snapshot_meta(_gversion) or {}
+            _gner = _meta.get("ner_model", "")
+            _gllm = _meta.get("llm_model")
+            _gskip = bool(_meta.get("skip_llm", True))
+            _gstrat = _gcfg.builder_strategy
         except Exception:
             _gversion, _gner, _gllm, _gskip, _gstrat = "unknown", "", None, True, "ner_llm"
 
