@@ -166,6 +166,9 @@ export interface DebugResult {
   final_hits: DebugHit[]
   answer_with_graph: string
   answer_without_graph: string
+  context_with_graph: string
+  context_without_graph: string
+  system_prompt: string
 }
 
 export interface GraphSearchResult {
@@ -213,6 +216,7 @@ export interface GraphSnapshot {
   node_count: number
   edge_count: number
   semantic_edge_count: number
+  cooccur_edge_count?: number
   document_count: number
   documents: string[]
   note: string
@@ -231,7 +235,42 @@ export interface GraphDiff {
   unchanged_count: number
   added_nodes: GraphDiffNode[]
   removed_nodes: GraphDiffNode[]
+  unchanged_nodes: GraphDiffNode[]
 }
+
+export interface DebugRecordSummary {
+  id: string
+  created_at: string
+  question: string
+  top_k: number
+  graph_version: string
+  graph_ner_model: string
+  graph_llm_model: string | null
+  graph_skip_llm: boolean
+  graph_strategy: string
+  qa_llm_model: string
+  vector_hit_count: number
+  graph_hit_count: number
+}
+
+export interface DebugRecord extends DebugResult {
+  id: string
+  created_at: string
+  graph_version: string
+  graph_ner_model: string
+  graph_llm_model: string | null
+  graph_skip_llm: boolean
+  graph_strategy: string
+  qa_llm_model: string
+  qa_llm_base_url: string
+}
+
+export const getDebugRecords = () =>
+  api.get<DebugRecordSummary[]>('/debug/records')
+export const getDebugRecord = (id: string) =>
+  api.get<DebugRecord>(`/debug/records/${id}`)
+export const deleteDebugRecord = (id: string) =>
+  api.delete(`/debug/records/${id}`)
 
 export const getGraph = () => api.get<GraphData>('/graph/')
 export const getSubgraph = (entity: string, depth = 2) =>

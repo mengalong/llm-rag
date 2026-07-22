@@ -197,8 +197,14 @@ export default function GraphViewer({ docs }: Props) {
     if (!diffV1 || !diffV2) return
     setDiffLoading(true)
     setDiffResult(null)
+    setShowCategories(false)
+    // Sort so smaller version number is always the "from" (older)
+    const versionNum = (v: string) => parseInt(v.replace(/\D/g, ''), 10) || 0
+    const [lo, hi] = versionNum(diffV1) <= versionNum(diffV2)
+      ? [diffV1, diffV2]
+      : [diffV2, diffV1]
     try {
-      const r = await getGraphDiff(diffV1, diffV2)
+      const r = await getGraphDiff(lo, hi)
       setDiffResult(r.data)
     } catch (e) { console.error(e) }
     finally { setDiffLoading(false) }
@@ -275,11 +281,12 @@ export default function GraphViewer({ docs }: Props) {
   )
 
   const filteredDiffNodes = useMemo(() => {
-    if (!diffResult) return { added: [] as GraphDiffNode[], removed: [] as GraphDiffNode[] }
+    if (!diffResult) return { added: [] as GraphDiffNode[], removed: [] as GraphDiffNode[], unchanged: [] as GraphDiffNode[] }
     const q = diffSearch.toLowerCase()
     return {
-      added: diffResult.added_nodes.filter(n => !q || n.label.toLowerCase().includes(q)),
-      removed: diffResult.removed_nodes.filter(n => !q || n.label.toLowerCase().includes(q)),
+      added:     diffResult.added_nodes.filter(n => !q || n.label.toLowerCase().includes(q)),
+      removed:   diffResult.removed_nodes.filter(n => !q || n.label.toLowerCase().includes(q)),
+      unchanged: (diffResult.unchanged_nodes ?? []).filter(n => !q || n.label.toLowerCase().includes(q)),
     }
   }, [diffResult, diffSearch])
 
@@ -300,32 +307,56 @@ export default function GraphViewer({ docs }: Props) {
                   const isV1 = diffV1 === s.version
                   const isV2 = diffV2 === s.version
                   const ts = new Date(s.timestamp).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                  const strategyLabel = s.skip_llm ? 'NER' : `NER+LLM`
+                  const nerModel = s.ner_model ?? 'zh_core_web_sm'
+                  const shortNer = nerModel.replace('zh_core_web_', '')  // sm / trf / lg
+                  const modelLine = s.skip_llm
+                    ? `spaCy ${shortNer}`
+                    : `spaCy ${shortNer} + ${(s.llm_model ?? '').split(/[\s/]/).pop() ?? 'LLM'}`
                   return (
                     <div
                       key={s.version}
                       className={`${styles.snapshotItem} ${isV1 ? styles.snapshotItemV1 : ''} ${isV2 ? styles.snapshotItemV2 : ''}`}
                       onClick={() => toggleDiffVersion(s.version)}
-                      title={`${s.skip_llm ? 'NER only' : s.llm_model ?? 'unknown model'}`}
                     >
-                      <span className={styles.snapshotVer}>{s.version}</span>
-                      <span className={styles.snapshotTs}>{ts}</span>
-                      <span className={styles.snapshotNodes}>{s.node_count.toLocaleString()}节点</span>
-                      {(isV1 || isV2) && (
-                        <span className={`${styles.snapshotBadge} ${isV1 ? styles.snapshotBadgeV1 : styles.snapshotBadgeV2}`}>
-                          {isV1 ? 'A' : 'B'}
-                        </span>
-                      )}
-                      <button className={styles.snapshotDel} onClick={(e) => handleDeleteSnapshot(s.version, e)} title="删除">×</button>
+                      <div className={styles.snapshotMain}>
+                        <span className={styles.snapshotVer}>{s.version}</span>
+                        <span className={styles.snapshotTs}>{ts}</span>
+                        <span className={styles.snapshotNodes}>{s.node_count.toLocaleString()}节点</span>
+                        {(isV1 || isV2) && (
+                          <span className={`${styles.snapshotBadge} ${isV1 ? styles.snapshotBadgeV1 : styles.snapshotBadgeV2}`}>
+                            {isV1 ? 'A' : 'B'}
+                          </span>
+                        )}
+                        <button className={styles.snapshotDel} onClick={(e) => handleDeleteSnapshot(s.version, e)} title="删除">×</button>
+                      </div>
+                      <div className={styles.snapshotMeta}>
+                        <span className={styles.snapshotStrategy}>{strategyLabel}</span>
+                        <span className={styles.snapshotModel}>{modelLine}</span>
+                      </div>
                     </div>
                   )
                 })}
-                <button
-                  className={styles.snapshotDiffBtn}
-                  disabled={!diffV1 || !diffV2 || diffLoading}
-                  onClick={runDiff}
-                >
-                  {diffLoading ? '对比中...' : diffV1 && diffV2 ? `对比 ${diffV1} → ${diffV2}` : '选择两个版本后对比'}
-                </button>
+                <div className={styles.snapshotDiffBtnRow}>
+                  <button
+                    className={styles.snapshotDiffBtn}
+                    disabled={!diffV1 || !diffV2 || diffLoading}
+                    onClick={runDiff}
+                  >
+                    {diffLoading ? '对比中...' : (() => {
+                      if (!diffV1 || !diffV2) return '选择两个版本后对比'
+                      const vn = (v: string) => parseInt(v.replace(/\D/g, ''), 10) || 0
+                      const [lo, hi] = vn(diffV1) <= vn(diffV2) ? [diffV1, diffV2] : [diffV2, diffV1]
+                      return `对比 ${lo} → ${hi}`
+                    })()}
+                  </button>
+                  {diffResult && (
+                    <button
+                      className={styles.snapshotCancelBtn}
+                      onClick={() => { setDiffResult(null); setDiffSearch(''); setDiffV1(null); setDiffV2(null) }}
+                    >✕ 关闭对比</button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -449,138 +480,224 @@ export default function GraphViewer({ docs }: Props) {
 
       {/* Right content */}
       <div className={styles.content}>
-        {/* Overview banner — always visible at top of right area */}
-        {overview && (
-          <div className={styles.overviewBar}>
-            <div className={styles.overviewStats}>
-              {[
-                { v: overview.node_count.toLocaleString(), k: '实体节点' },
-                { v: overview.edge_count.toLocaleString(), k: '关系边' },
-                { v: overview.semantic_edge_count.toLocaleString(), k: '语义关系' },
-                { v: overview.document_count, k: '覆盖文档' },
-              ].map(({ v, k }) => (
-                <div key={k} className={styles.overviewStatItem}>
-                  <span className={styles.overviewStatValue}>{v}</span>
-                  <span className={styles.overviewStatKey}>{k}</span>
-                </div>
-              ))}
-            </div>
-            {overview.entity_type_stats.length > 0 && (
-              <div className={styles.overviewTypeBars}>
-                {overview.entity_type_stats.slice(0, 6).map((s) => {
-                  const pct = Math.round(s.count / overview.node_count * 100)
-                  return (
-                    <div key={s.type} className={styles.overviewTypeItem} title={`${s.label}: ${s.count}`}>
-                      <div className={styles.overviewTypeDot} style={{ background: s.color }} />
-                      <span className={styles.overviewTypeLabel}>{s.label}</span>
-                      <div className={styles.overviewTypeTrack}>
-                        <div className={styles.overviewTypeFill} style={{ width: `${pct}%`, background: s.color }} />
+
+        {/* Overview — always shown when no doc selected and no subgraph */}
+        {!selectedDocId && overview && (
+          <div className={styles.overviewDefault}>
+            {/* Version comparison cards (when two versions selected) */}
+            {diffV1 && diffV2 && (
+              <div className={styles.overviewMultiCol}>
+                {(() => {
+                  const vn = (v: string) => parseInt(v.replace(/\D/g, ''), 10) || 0
+                  const [lo, hi] = vn(diffV1) <= vn(diffV2) ? [diffV1, diffV2] : [diffV2, diffV1]
+                  return [lo, hi].map(ver => {
+                    const snap = snapshots.find(s => s.version === ver)
+                    const isNewer = ver === hi
+                    if (!snap) return null
+                    const nerShort = (snap.ner_model ?? 'sm').replace('zh_core_web_', '')
+                    const strategy = snap.skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
+                    const llmModel = !snap.skip_llm ? (snap.llm_model ?? '') : ''
+                    const ts = new Date(snap.timestamp).toLocaleString('zh-CN', {
+                      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+                    })
+                    return (
+                      <div key={ver} className={`${styles.snapshotOverviewCard} ${isNewer ? styles.snapshotOverviewCardNew : styles.snapshotOverviewCardOld}`}>
+                        {/* Version info card — same as single column */}
+                        <div className={styles.currentVersionCard}>
+                          <div className={styles.currentVersionRow}>
+                            <span className={styles.currentVersionBadge}>{ver}</span>
+                            <span className={styles.currentVersionLabel}>{isNewer ? '新版本' : '旧版本'}</span>
+                            <span className={styles.currentVersionTs}>{ts}</span>
+                          </div>
+                          <div className={styles.currentVersionRow}>
+                            <span className={styles.currentVersionMeta}>构建策略：{strategy}</span>
+                            {llmModel && <span className={styles.currentVersionMeta}>LLM：{llmModel}</span>}
+                            <span className={styles.currentVersionMeta}>NER：{snap.ner_model ?? 'zh_core_web_sm'}</span>
+                          </div>
+                        </div>
+                        {/* Stats cards — same grid as single column */}
+                        <div className={styles.overviewCardGrid}>
+                          {[
+                            { v: snap.node_count.toLocaleString(), k: '实体节点', accent: true },
+                            { v: snap.edge_count.toLocaleString(), k: '关系边', accent: false },
+                            { v: snap.semantic_edge_count.toLocaleString(), k: '语义关系', accent: false },
+                            { v: snap.cooccur_edge_count?.toLocaleString() ?? '—', k: '共现关系', accent: false },
+                            { v: snap.document_count, k: '覆盖文档', accent: false },
+                          ].map(({ v, k, accent }) => (
+                            <div key={k} className={styles.overviewCard}>
+                              <div className={`${styles.overviewCardValue} ${accent ? styles.overviewCardValueAccent : ''}`}>{v}</div>
+                              <div className={styles.overviewCardKey}>{k}</div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <span className={styles.overviewTypeCount}>{s.count}</span>
-                    </div>
-                  )
-                })}
+                    )
+                  })
+                })()}
               </div>
             )}
-            {overview.top_relations.length > 0 && (
-              <div className={styles.overviewRelations}>
-                <span className={styles.overviewRelLabel}>高频关系：</span>
-                {overview.top_relations.slice(0, 5).map((r) => (
-                  <span key={r.relation} className={styles.overviewRelTag}>
-                    {r.relation} <span className={styles.overviewRelCount}>{r.count}</span>
-                  </span>
+
+            {/* Single-column current graph overview — card style */}
+            {(!diffV1 || !diffV2) && (
+              <>
+                {/* Single-column current graph overview — card style */}
+                {snapshots.length > 0 && (() => {
+                  const latest = snapshots[0]
+                  const nerShort = (latest.ner_model ?? 'sm').replace('zh_core_web_', '')
+                  const strategy = latest.skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
+                  const llmModel = !latest.skip_llm ? (latest.llm_model ?? '') : ''
+                  const ts = new Date(latest.timestamp).toLocaleString('zh-CN', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit',
+                  })
+                  return (
+                    <div className={styles.currentVersionCard}>
+                      <div className={styles.currentVersionRow}>
+                        <span className={styles.currentVersionBadge}>{latest.version}</span>
+                        <span className={styles.currentVersionLabel}>当前图谱版本</span>
+                        <span className={styles.currentVersionTs}>{ts}</span>
+                      </div>
+                      <div className={styles.currentVersionRow}>
+                        <span className={styles.currentVersionMeta}>构建策略：{strategy}</span>
+                        {llmModel && <span className={styles.currentVersionMeta}>LLM：{llmModel}</span>}
+                        <span className={styles.currentVersionMeta}>NER：{latest.ner_model ?? 'zh_core_web_sm'}</span>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* Stats cards */}
+                <div className={styles.overviewCardGrid}>
+                  {[
+                    { v: overview.node_count.toLocaleString(), k: '实体节点', accent: true },
+                    { v: overview.edge_count.toLocaleString(), k: '关系边', accent: false },
+                    { v: overview.semantic_edge_count.toLocaleString(), k: '语义关系', accent: false },
+                    { v: overview.cooccur_edge_count.toLocaleString(), k: '共现关系', accent: false },
+                    { v: overview.document_count, k: '覆盖文档', accent: false },
+                  ].map(({ v, k, accent }) => (
+                    <div key={k} className={styles.overviewCard}>
+                      <div className={`${styles.overviewCardValue} ${accent ? styles.overviewCardValueAccent : ''}`}>{v}</div>
+                      <div className={styles.overviewCardKey}>{k}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {overview.entity_type_stats.length > 0 && (
+                  <div className={styles.overviewDefaultSection}>
+                    <div className={styles.overviewDefaultSectionTitle}>实体类型分布</div>
+                    {overview.entity_type_stats.map((s) => {
+                      const pct = Math.round(s.count / overview.node_count * 100)
+                      return (
+                        <div key={s.type} className={styles.overviewDefaultRow}>
+                          <div className={styles.overviewDefaultDot} style={{ background: s.color }} />
+                          <span className={styles.overviewDefaultLabel}>{s.label}</span>
+                          <div className={styles.overviewDefaultTrack}>
+                            <div className={styles.overviewDefaultFill} style={{ width: `${pct}%`, background: s.color }} />
+                          </div>
+                          <span className={styles.overviewDefaultCount}>{s.count}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                {overview.top_relations.length > 0 && (
+                  <div className={styles.overviewDefaultSection}>
+                    <div className={styles.overviewDefaultSectionTitle}>高频语义关系</div>
+                    <div className={styles.overviewDefaultRelList}>
+                      {overview.top_relations.map((r) => (
+                        <div key={r.relation} className={styles.overviewDefaultRelRow}>
+                          <span className={styles.overviewDefaultRelName}>{r.relation}</span>
+                          <span className={styles.overviewDefaultRelCount}>{r.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Entity categories inline — shown below stats when not diffing */}
+            {(!diffV1 || !diffV2) && categories && (
+              <div className={styles.categoriesInline}>
+                {[
+                  { badge: 'NER', badgeColor: 'rgba(99,102,241,0.15)', badgeText: 'var(--accent)', title: 'spaCy 命名实体识别', total: categories.ner_total, nodes: categories.ner_nodes },
+                  { badge: 'LLM', badgeColor: 'rgba(148,163,184,0.15)', badgeText: '#94a3b8', title: '大模型关系抽取实体', total: categories.llm_total, nodes: categories.llm_nodes },
+                ].map(({ badge, badgeColor, badgeText, title, total, nodes }) => (
+                  <div key={badge} className={styles.categoriesInlineGroup}>
+                    <div className={styles.categoryGroupHeader}>
+                      <span className={styles.categoryGroupBadge} style={{ background: badgeColor, color: badgeText }}>{badge}</span>
+                      <span className={styles.categoryGroupTitle}>{title}</span>
+                      <span className={styles.categoryGroupCount}>{total} 个</span>
+                    </div>
+                    {nodes.map((cat) => {
+                      const typeKey = badge === 'LLM' ? 'LLM' : cat.type
+                      const isExpanded = expandedType === typeKey
+                      return (
+                        <div key={cat.type}>
+                          <div
+                            className={`${styles.categoryRow} ${isExpanded ? styles.categoryRowActive : ''}`}
+                            onClick={() => handleTypeExpand(typeKey)}
+                          >
+                            <div className={styles.categoryDot} style={{ background: cat.color }} />
+                            <span className={styles.categoryLabel}>{cat.label}</span>
+                            <span className={styles.categoryType}>{cat.type}</span>
+                            <span className={styles.categoryCount}>{cat.count}</span>
+                            <span className={styles.categoryExpandIcon}>{isExpanded ? '▲' : '▼'}</span>
+                          </div>
+                          {isExpanded && (
+                            <div className={styles.categoryDetail}>
+                              {typeDetailLoading && typeDetail === null && (
+                                <div className={styles.categoryDetailLoading}>加载中...</div>
+                              )}
+                              {typeDetail && (
+                                <>
+                                  <div className={styles.entityTable}>
+                                    <div className={styles.entityTableHeader}>
+                                      <span className={styles.entityTableCol}>实体名称</span>
+                                      <span className={styles.entityTableColDeg}>度数</span>
+                                      <span className={styles.entityTableColDoc}>来源文档</span>
+                                    </div>
+                                    {typeDetail.items.map((item) => (
+                                      <div key={item.label} className={styles.entityTableRow} onClick={() => handleEntityClick(item.label)}>
+                                        <span className={styles.entityTableName}>{item.label}</span>
+                                        <span className={styles.entityTableDeg}>{item.degree}</span>
+                                        <span className={styles.entityTableDoc}>
+                                          {item.document_names.map((n, i) => (
+                                            <span key={i} className={styles.entityTableDocTag} title={n}>{n}</span>
+                                          ))}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {typeDetail.items.length < typeDetail.total && (
+                                    <div className={styles.categoryLoadMore}>
+                                      <span className={styles.categoryLoadMoreHint}>
+                                        已显示 {typeDetail.items.length} / {typeDetail.total}
+                                      </span>
+                                      <button
+                                        className={styles.categoryLoadMoreBtn}
+                                        onClick={(e) => { e.stopPropagation(); loadMoreTypeDetail() }}
+                                        disabled={typeDetailLoading}
+                                      >
+                                        {typeDetailLoading ? '加载中...' : '加载更多'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 ))}
               </div>
             )}
           </div>
         )}
 
-        {/* Entity categories panel — always visible by default */}
-        {categories && showCategories && (
-          <div className={styles.categoriesPanel}>
-            <div className={styles.categoriesHeader}>
-              <span className={styles.categoriesTitle}>实体来源分类</span>
-              <button className={styles.categoriesClose} onClick={() => setShowCategories(false)} title="收起">✕</button>
-            </div>
-            <div className={styles.categoriesBody}>
-              {[
-                { badge: 'NER', badgeColor: 'rgba(99,102,241,0.15)', badgeText: 'var(--accent)', title: 'spaCy 命名实体识别', total: categories.ner_total, nodes: categories.ner_nodes },
-                { badge: 'LLM', badgeColor: 'rgba(148,163,184,0.15)', badgeText: '#94a3b8', title: '大模型关系抽取实体', total: categories.llm_total, nodes: categories.llm_nodes },
-              ].map(({ badge, badgeColor, badgeText, title, total, nodes }) => (
-                <div key={badge} className={styles.categoryGroup}>
-                  <div className={styles.categoryGroupHeader}>
-                    <span className={styles.categoryGroupBadge} style={{ background: badgeColor, color: badgeText }}>{badge}</span>
-                    <span className={styles.categoryGroupTitle}>{title}</span>
-                    <span className={styles.categoryGroupCount}>{total} 个</span>
-                  </div>
-                  {nodes.map((cat) => {
-                    const typeKey = badge === 'LLM' ? 'LLM' : cat.type
-                    const isExpanded = expandedType === typeKey
-                    return (
-                      <div key={cat.type}>
-                        <div
-                          className={`${styles.categoryRow} ${isExpanded ? styles.categoryRowActive : ''}`}
-                          onClick={() => handleTypeExpand(typeKey)}
-                        >
-                          <div className={styles.categoryDot} style={{ background: cat.color }} />
-                          <span className={styles.categoryLabel}>{cat.label}</span>
-                          <span className={styles.categoryType}>{cat.type}</span>
-                          <span className={styles.categoryCount}>{cat.count}</span>
-                          <span className={styles.categoryExpandIcon}>{isExpanded ? '▲' : '▼'}</span>
-                        </div>
-                        {isExpanded && (
-                          <div className={styles.categoryDetail}>
-                            {typeDetailLoading && typeDetail === null && (
-                              <div className={styles.categoryDetailLoading}>加载中...</div>
-                            )}
-                            {typeDetail && (
-                              <>
-                                <div className={styles.entityTable}>
-                                  <div className={styles.entityTableHeader}>
-                                    <span className={styles.entityTableCol}>实体名称</span>
-                                    <span className={styles.entityTableColDeg}>度数</span>
-                                    <span className={styles.entityTableColDoc}>来源文档</span>
-                                  </div>
-                                  {typeDetail.items.map((item) => (
-                                    <div key={item.label} className={styles.entityTableRow} onClick={() => handleEntityClick(item.label)}>
-                                      <span className={styles.entityTableName}>{item.label}</span>
-                                      <span className={styles.entityTableDeg}>{item.degree}</span>
-                                      <span className={styles.entityTableDoc}>
-                                        {item.document_names.map((n, i) => (
-                                          <span key={i} className={styles.entityTableDocTag} title={n}>{n}</span>
-                                        ))}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                                {typeDetail.items.length < typeDetail.total && (
-                                  <div className={styles.categoryLoadMore}>
-                                    <span className={styles.categoryLoadMoreHint}>
-                                      已显示 {typeDetail.items.length} / {typeDetail.total}
-                                    </span>
-                                    <button
-                                      className={styles.categoryLoadMoreBtn}
-                                      onClick={(e) => { e.stopPropagation(); loadMoreTypeDetail() }}
-                                      disabled={typeDetailLoading}
-                                    >
-                                      {typeDetailLoading ? '加载中...' : '加载更多'}
-                                    </button>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {!selectedDocId && !showCategories && !diffResult && (
+        {!selectedDocId && !overview && (
           <div className={styles.empty}>搜索实体后点击结果，或选择左侧文档查看实体图谱</div>
         )}
         {selectedDocId && loading && (
@@ -620,11 +737,10 @@ export default function GraphViewer({ docs }: Props) {
                 value={diffSearch}
                 onChange={e => setDiffSearch(e.target.value)}
               />
-              <button className={styles.resetBtn} onClick={() => { setDiffResult(null); setDiffSearch('') }}>✕ 关闭</button>
             </div>
             <div className={styles.diffBody}>
               <div className={styles.diffCol}>
-                <div className={styles.diffColHeader}>新增实体 <span className={styles.diffColCount}>{filteredDiffNodes.added.length}</span></div>
+                <div className={styles.diffColHeader}>新增实体 <span className={`${styles.diffColCount} ${styles.diffColCountAdded}`}>{filteredDiffNodes.added.length}</span></div>
                 <div className={styles.diffColScroll}>
                   {filteredDiffNodes.added.map((n, i) => (
                     <div key={i} className={`${styles.diffNode} ${styles.diffNodeAdded}`} onClick={() => handleEntityClick(n.label)}>
@@ -638,7 +754,7 @@ export default function GraphViewer({ docs }: Props) {
               </div>
               <div className={styles.diffColDivider} />
               <div className={styles.diffCol}>
-                <div className={styles.diffColHeader}>删除实体 <span className={styles.diffColCount}>{filteredDiffNodes.removed.length}</span></div>
+                <div className={styles.diffColHeader}>删除实体 <span className={`${styles.diffColCount} ${styles.diffColCountRemoved}`}>{filteredDiffNodes.removed.length}</span></div>
                 <div className={styles.diffColScroll}>
                   {filteredDiffNodes.removed.map((n, i) => (
                     <div key={i} className={`${styles.diffNode} ${styles.diffNodeRemoved}`}>
@@ -648,6 +764,20 @@ export default function GraphViewer({ docs }: Props) {
                     </div>
                   ))}
                   {filteredDiffNodes.removed.length === 0 && <div className={styles.empty}>无结果</div>}
+                </div>
+              </div>
+              <div className={styles.diffColDivider} />
+              <div className={styles.diffCol}>
+                <div className={styles.diffColHeader}>不变实体 <span className={styles.diffColCountUnchanged}>{filteredDiffNodes.unchanged.length}</span></div>
+                <div className={styles.diffColScroll}>
+                  {filteredDiffNodes.unchanged.map((n, i) => (
+                    <div key={i} className={`${styles.diffNode} ${styles.diffNodeUnchanged}`} onClick={() => handleEntityClick(n.label)}>
+                      <div className={styles.nodeTypeDot} style={{ background: TYPE_COLOR[n.type] ?? TYPE_COLOR.ENTITY }} />
+                      <span className={styles.diffNodeLabel}>{n.label}</span>
+                      <span className={styles.diffNodeType}>{n.type}</span>
+                    </div>
+                  ))}
+                  {filteredDiffNodes.unchanged.length === 0 && <div className={styles.empty}>无结果</div>}
                 </div>
               </div>
             </div>

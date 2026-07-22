@@ -1,9 +1,163 @@
 .page {
   display: flex;
-  flex-direction: column;
   height: 100%;
   overflow: hidden;
 }
+
+/* ── History sidebar ── */
+.historySidebar {
+  width: 200px;
+  min-width: 180px;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.historyHeader {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 10px 12px 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.historyCount {
+  font-size: 10px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 1px 5px;
+}
+
+.historyList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+.historyList::-webkit-scrollbar { width: 3px; }
+.historyList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.historyEmpty {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 10px;
+  text-align: center;
+}
+
+.historyItem {
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border: 1px solid transparent;
+  margin-bottom: 3px;
+  position: relative;
+}
+.historyItem:hover { background: var(--surface); }
+.historyItemActive { background: var(--accent-subtle); border-color: var(--accent); }
+
+.historyItemQ {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 500;
+  line-height: 1.3;
+  margin-bottom: 4px;
+  padding-right: 16px;
+}
+
+.historyItemMeta {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+
+.historyVerBadge {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.historyStrategy {
+  font-size: 9px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-radius: 3px;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+}
+
+.historyLlm {
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.historyItemTs {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.historyDel {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  background: none;
+  border: none;
+  color: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  transition: color 0.1s;
+}
+.historyItem:hover .historyDel { color: var(--text-muted); }
+.historyDel:hover { color: var(--danger) !important; }
+
+/* ── Main area ── */
+.mainArea {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Version meta banner ── */
+.metaBanner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.metaItem {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.metaItem strong { color: var(--accent); font-weight: 700; }
+
+.metaSep {
+  font-size: 11px;
+  color: var(--border);
+}
+
+
 
 /* ── Input ── */
 .inputArea {
@@ -320,6 +474,59 @@
   font-size: 13px;
   color: var(--text-muted);
   font-style: italic;
+}
+
+.promptToggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 2px 8px;
+  margin-left: auto;
+  transition: background 0.1s, color 0.1s;
+}
+.promptToggle:hover { background: var(--surface); color: var(--text); }
+
+.sameContextNote {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 4px;
+  font-weight: 400;
+}
+
+.promptPanel {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--sidebar-bg);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.promptPanel::-webkit-scrollbar { width: 3px; }
+.promptPanel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.promptSection { padding: 8px 14px; border-bottom: 1px solid var(--border); }
+.promptSection:last-child { border-bottom: none; }
+
+.promptSectionTitle {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 5px;
+}
+
+.promptPre {
+  font-size: 11px;
+  font-family: 'Menlo', 'Consolas', monospace;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
 }
 
 /* ── Placeholder ── */
