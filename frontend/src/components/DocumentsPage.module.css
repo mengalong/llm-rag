@@ -106,23 +106,21 @@
   padding: 6px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.1s;
 }
+.strategyToggleRow:hover { background: var(--surface-hover); }
+.strategyToggleRow.active { background: var(--accent-subtle); }
 .strategyToggleLabel {
   font-size: 12px;
   color: var(--text-muted);
+  pointer-events: none;
 }
 .strategyToggleBtn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-muted);
-  cursor: pointer;
   font-size: 12px;
-  padding: 2px 7px;
-  transition: background 0.1s, color 0.1s;
+  color: var(--text-muted);
+  pointer-events: none;
 }
-.strategyToggleBtn:hover { background: var(--surface-hover); color: var(--text); }
-.strategyToggleBtnActive { background: var(--accent-subtle); color: var(--accent); border-color: var(--accent); }
 
 /* Strategy panel inside sidebar */
 .strategyPanelSidebar {

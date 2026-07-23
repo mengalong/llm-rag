@@ -192,10 +192,10 @@ function DocSidebar({ docs, selectedId, onSelectId, uploading, uploadProgress, o
       </div>
 
       {/* Strategy config */}
-      <div className={styles.strategyToggleRow}>
+      <div className={`${styles.strategyToggleRow} ${showStrategy ? styles.active : ''}`}
+        onClick={() => setShowStrategy(v => !v)}>
         <span className={styles.strategyToggleLabel}>切片策略：{STRATEGY_LABELS[strategy]}</span>
-        <button className={`${styles.strategyToggleBtn} ${showStrategy ? styles.strategyToggleBtnActive : ''}`}
-          onClick={() => setShowStrategy(v => !v)}>⚙</button>
+        <span className={styles.strategyToggleBtn}>{showStrategy ? '▲' : '⚙'}</span>
       </div>
       {showStrategy && (
         <div className={styles.strategyPanelSidebar}>

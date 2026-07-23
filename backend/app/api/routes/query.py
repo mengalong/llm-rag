@@ -208,6 +208,7 @@ async def debug_query_stream(question: str, top_k: int = 5):
                     match_reason=reason,
                     matched_by=matched_by,
                 ))
+            parent_label = g.nodes[nid].get("label", ent)
             for nb in list(g.neighbors(nid))[:5]:
                 if nb not in seen_nids:
                     seen_nids.add(nb)
@@ -216,7 +217,7 @@ async def debug_query_stream(question: str, top_k: int = 5):
                         type=g.nodes[nb].get("type", "ENTITY"),
                         degree=g.degree(nb),
                         match_reason="graph_neighbor",
-                        matched_by="",
+                        matched_by=parent_label,
                     ))
 
         # Emit retrieval info immediately (include contexts for frontend display)

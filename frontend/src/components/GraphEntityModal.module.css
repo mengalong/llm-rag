@@ -27,6 +27,8 @@
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
   overflow: hidden;
   transition: width 0.22s ease, height 0.22s ease, border-radius 0.22s ease;
+  font-size: 14px;
+  font-family: "Inter", "SF Pro Display", -apple-system, sans-serif;
 }
 
 .modalFullscreen {
@@ -74,7 +76,7 @@
 }
 
 .stats {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -102,6 +104,54 @@
   color: #fff;
   border-color: var(--accent);
   font-weight: 500;
+}
+
+.fontSizeCtrl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 4px;
+  background: var(--surface);
+}
+
+.fontSizeBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  transition: background 0.1s, color 0.1s;
+  line-height: 1;
+}
+.fontSizeBtn:hover { background: var(--surface-hover); color: var(--text); }
+
+.fontSizeInput {
+  width: 32px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 11px;
+  font-family: inherit;
+  text-align: center;
+  outline: none;
+  padding: 0;
+  -moz-appearance: textfield;
+}
+.fontSizeInput::-webkit-inner-spin-button,
+.fontSizeInput::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+.fontSizePx {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-right: 2px;
+  user-select: none;
 }
 
 .closeBtn {
@@ -133,7 +183,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -147,7 +197,7 @@
 
 .hint {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   opacity: 0.7;
   flex-shrink: 0;

@@ -6,14 +6,10 @@
 
 /* ── History sidebar ── */
 .historySidebar {
-  width: 200px;
-  min-width: 180px;
-  border-right: 1px solid var(--border);
-  background: var(--sidebar-bg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  flex-shrink: 0;
+  height: 100%;
 }
 
 .historyHeader {
@@ -54,19 +50,24 @@
 }
 
 .historyItem {
-  padding: 7px 8px;
+  padding: 8px 10px;
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.1s;
   border: 1px solid transparent;
-  margin-bottom: 3px;
+  border-left: 2px solid transparent;
+  margin-bottom: 2px;
   position: relative;
 }
-.historyItem:hover { background: var(--surface); }
-.historyItemActive { background: var(--accent-subtle); border-color: var(--accent); }
+.historyItem:hover { background: var(--surface); color: var(--text); }
+.historyItemActive {
+  background: var(--accent-subtle);
+  border-color: transparent;
+  border-left-color: var(--accent);
+}
 
 .historyItemQ {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text);
   font-weight: 500;
   line-height: 1.3;
@@ -77,36 +78,36 @@
 .historyItemMeta {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   flex-wrap: wrap;
   margin-bottom: 3px;
 }
 
 .historyVerBadge {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   background: var(--accent);
   color: #fff;
   border-radius: 3px;
-  padding: 1px 4px;
+  padding: 1px 5px;
 }
 
 .historyStrategy {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--text-muted);
   background: var(--surface);
   border-radius: 3px;
-  padding: 1px 4px;
+  padding: 1px 5px;
   border: 1px solid var(--border);
 }
 
 .historyLlm {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
 .historyItemTs {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
@@ -258,7 +259,7 @@
 .retrievalCol:last-child { border-right: none; }
 
 .colHeader {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
   padding: 8px 14px;
@@ -293,7 +294,7 @@
 }
 
 .sectionTitle {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -302,10 +303,21 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  flex-wrap: wrap;
 }
 
-.empty { font-size: 12px; color: var(--text-muted); padding: 2px 0; }
-.emptyCol { font-size: 12px; color: var(--text-muted); padding: 12px 14px; }
+.sectionHint {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.75;
+  flex: 1;
+}
+
+.empty { font-size: 13px; color: var(--text-muted); padding: 2px 0; }
+.emptyCol { font-size: 13px; color: var(--text-muted); padding: 12px 14px; }
 
 /* Pills */
 .pill {
@@ -314,10 +326,58 @@
   gap: 3px;
   border-radius: 10px;
   padding: 2px 8px;
-  font-size: 12px;
+  font-size: 13px;
   margin: 2px 3px 2px 0;
 }
-.pillTag { font-size: 10px; opacity: 0.65; }
+.pillTag { font-size: 11px; opacity: 0.65; }
+
+.nodeRowClickable {
+  cursor: pointer;
+  border-radius: 5px;
+  padding: 3px 4px;
+  margin: 1px -4px;
+  transition: background 0.1s;
+}
+.nodeRowClickable:hover { background: var(--surface-hover); }
+
+/* Node groups: hit node + indented neighbors */
+.nodeGroup {
+  margin-bottom: 4px;
+}
+
+.neighborList {
+  margin-left: 10px;
+  border-left: 2px solid var(--border);
+  padding-left: 0;
+}
+
+.neighborRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.neighborConnector {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding-top: 8px;
+  width: 24px;
+}
+
+.neighborLine {
+  width: 10px;
+  height: 1px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.neighborArrow {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  line-height: 1;
+}
 
 /* Nodes */
 .nodeRow {
@@ -328,21 +388,23 @@
 }
 .nodeTypeDot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
 .nodeInfo { flex: 1; min-width: 0; }
-.nodeMain { display: flex; align-items: center; gap: 5px; font-size: 11px; flex-wrap: wrap; }
-.nodeLabel { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; }
-.nodeType { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
-.nodeDeg { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
-.nodeReason { font-size: 10px; font-weight: 600; flex-shrink: 0; }
+.nodeMain { display: flex; align-items: center; gap: 5px; font-size: 13px; flex-wrap: wrap; }
+.nodeLabel { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+.nodeType { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.nodeDeg { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.nodeReason { font-size: 11px; font-weight: 600; flex-shrink: 0; }
 .nodeMatchedBy {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-top: 1px;
+  margin-top: 2px;
   padding-left: 2px;
+  line-height: 1.4;
 }
+.nodeMatchedBy strong { color: var(--text); font-weight: 500; }
 
 /* Paths */
 .pathRow {
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 0;
   display: flex;
   align-items: center;
@@ -354,9 +416,9 @@
   border-radius: 3px;
   color: var(--accent);
   padding: 0 4px;
-  font-size: 11px;
+  font-size: 12px;
 }
-.pathRel { font-size: 10px; color: var(--text-muted); font-style: italic; }
+.pathRel { font-size: 11px; color: var(--text-muted); font-style: italic; }
 
 /* Hit cards */
 .hitCard { border-bottom: 1px solid var(--border); }
@@ -381,13 +443,13 @@
 }
 .hitBadgeGraph { background: rgba(52,211,153,0.15); color: #34d399; }
 
-.hitScore { font-size: 11px; font-weight: 600; color: var(--accent); flex-shrink: 0; min-width: 50px; }
-.hitFile { flex: 1; font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hitPage, .hitChunk, .hitToggle { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
-.hitHeading { font-size: 10px; color: var(--text-muted); padding: 0 12px 3px; font-style: italic; }
+.hitScore { font-size: 12px; font-weight: 600; color: var(--accent); flex-shrink: 0; min-width: 50px; }
+.hitFile { flex: 1; font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hitPage, .hitChunk, .hitToggle { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+.hitHeading { font-size: 11px; color: var(--text-muted); padding: 0 12px 3px; font-style: italic; }
 .hitExcerpt {
   padding: 7px 12px;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-muted);
   white-space: pre-wrap;

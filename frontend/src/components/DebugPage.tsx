@@ -7,6 +7,7 @@ import {
   debugQueryStream, getDebugRecords, getDebugRecord, deleteDebugRecord
 } from '../api/client'
 import { useSidebar } from '../context/SidebarContext'
+import GraphEntityModal from './GraphEntityModal'
 import styles from './DebugPage.module.css'
 
 const TYPE_COLOR: Record<string, string> = {
@@ -42,24 +43,46 @@ function HitCard({ hit }: { hit: DebugHit }) {
   )
 }
 
-function NodeRow({ node }: { node: MatchedGraphNode }) {
+function NodeRow({ node, onEntityClick }: { node: MatchedGraphNode; onEntityClick: (label: string) => void }) {
+  // Parse "kw → node_label" format from fuzzy matched_by
+  const [kwPart, nodePart] = node.matched_by?.includes(' → ')
+    ? node.matched_by.split(' → ')
+    : [node.matched_by, '']
+
+  const matchDetail = () => {
+    if (node.match_reason === 'ner') {
+      // NER: matched_by is the NER entity extracted from question
+      return kwPart && kwPart !== node.label
+        ? <span>问题实体 <strong>「{kwPart}」</strong> → 命中节点 <strong>「{node.label}」</strong></span>
+        : <span>问题实体 <strong>「{node.label}」</strong> 直接命中</span>
+    }
+    if (node.match_reason === 'fuzzy') {
+      // fuzzy: kwPart=keyword, nodePart=node_label (or just kwPart if same)
+      return nodePart
+        ? <span>关键词 <strong>「{kwPart}」</strong> → 模糊匹配 <strong>「{nodePart}」</strong></span>
+        : <span>关键词 <strong>「{kwPart}」</strong> 直接命中</span>
+    }
+    if (node.match_reason === 'graph_neighbor') {
+      return node.matched_by
+        ? <span>节点 <strong>「{node.matched_by}」</strong> 的邻居</span>
+        : null
+    }
+    return null
+  }
+
   return (
-    <div className={styles.nodeRow}>
+    <div className={`${styles.nodeRow} ${styles.nodeRowClickable}`} onClick={() => onEntityClick(node.label)}>
       <div className={styles.nodeTypeDot} style={{ background: TYPE_COLOR[node.type] ?? TYPE_COLOR.ENTITY }} />
       <div className={styles.nodeInfo}>
         <div className={styles.nodeMain}>
           <span className={styles.nodeLabel}>{node.label}</span>
           <span className={styles.nodeType}>{node.type}</span>
-          <span className={styles.nodeDeg}>度{node.degree}</span>
+          <span className={styles.nodeDeg} title="该实体在图谱中的连接边数，度越高表示关联关系越丰富">度{node.degree}</span>
           <span className={styles.nodeReason} style={{ color: REASON_COLOR[node.match_reason] }}>
             {REASON_LABEL[node.match_reason]}
           </span>
         </div>
-        {node.matched_by && node.match_reason !== 'graph_neighbor' && (
-          <div className={styles.nodeMatchedBy}>
-            {node.match_reason === 'fuzzy' ? `关键词「${node.matched_by}」` : `实体「${node.matched_by}」`}
-          </div>
-        )}
+        <div className={styles.nodeMatchedBy}>{matchDetail()}</div>
       </div>
     </div>
   )
@@ -74,7 +97,7 @@ interface DebugPageProps {
 
 export function DebugSidebarList({ records, selectedRecordId, onSelectRecord, onDeleteRecord }: DebugPageProps) {
   return (
-    <div className={styles.historySidebar} style={{ height: '100%' }}>
+    <div className={styles.historySidebar}>
       <div className={styles.historyHeader}>调试历史 <span className={styles.historyCount}>{records.length}</span></div>
       <div className={styles.historyList}>
         {records.length === 0 && <div className={styles.historyEmpty}>暂无记录</div>}
@@ -115,6 +138,7 @@ export default function DebugPage({ isActive = true }: { isActive?: boolean }) {
   const [answerWithout, setAnswerWithout] = useState('')
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [modalEntity, setModalEntity] = useState<string | null>(null)
   const [showPrompt, setShowPrompt] = useState(false)
   const esRef = useRef<EventSource | null>(null)
 
@@ -135,12 +159,15 @@ export default function DebugPage({ isActive = true }: { isActive?: boolean }) {
 
   useEffect(() => { loadRecords() }, [loadRecords])
 
-  const selectRecord = async (id: string) => {
+  // Use a ref so the sidebar's onClick always calls the latest version
+  // without needing to re-inject the sidebar on every render
+  const selectRecordRef = useRef<(id: string) => void>(() => {})
+
+  const selectRecord = useCallback(async (id: string) => {
     setSelectedRecordId(id)
     try {
       const r = await getDebugRecord(id)
       setRecordDetail(r.data)
-      // Show as readonly view
       setRetrieval({
         question: r.data.question,
         ner_entities: r.data.ner_entities,
@@ -166,7 +193,10 @@ export default function DebugPage({ isActive = true }: { isActive?: boolean }) {
         record_id: r.data.id,
       })
     } catch { /* ignore */ }
-  }
+  }, [])
+
+  // Keep ref in sync with latest function
+  useEffect(() => { selectRecordRef.current = selectRecord }, [selectRecord])
 
   const handleDeleteRecord = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -248,14 +278,14 @@ export default function DebugPage({ isActive = true }: { isActive?: boolean }) {
 
   useEffect(() => () => { esRef.current?.close() }, [])
 
-  // Inject sidebar — only when active
+  // Inject sidebar — only once when active (uses ref to avoid stale closure)
   useEffect(() => {
     if (!isActive) return
     setSidebarContent(
       <DebugSidebarList
         records={records}
         selectedRecordId={selectedRecordId}
-        onSelectRecord={id => selectRecord(id)}
+        onSelectRecord={id => selectRecordRef.current(id)}
         onDeleteRecord={async (id, e) => {
           e.stopPropagation()
           await deleteDebugRecord(id).catch(() => {})
@@ -322,7 +352,9 @@ export default function DebugPage({ isActive = true }: { isActive?: boolean }) {
               <div className={styles.colHeader}>图谱检索过程</div>
               <div className={styles.colScroll}>
                 <div className={styles.section}>
-                  <div className={styles.sectionTitle}>NER 实体</div>
+                  <div className={styles.sectionTitle}>NER 实体
+                    <span className={styles.sectionHint}>spaCy 从问题中识别的命名实体</span>
+                  </div>
                   {retrieval.ner_entities.length === 0
                     ? <div className={styles.empty}>未识别到命名实体</div>
                     : retrieval.ner_entities.map(e => (
@@ -332,7 +364,9 @@ export default function DebugPage({ isActive = true }: { isActive?: boolean }) {
                     ))}
                 </div>
                 <div className={styles.section}>
-                  <div className={styles.sectionTitle}>关键词匹配</div>
+                  <div className={styles.sectionTitle}>关键词匹配
+                    <span className={styles.sectionHint}>问题分词后模糊匹配到的图谱节点</span>
+                  </div>
                   {retrieval.fuzzy_entities.length === 0
                     ? <div className={styles.empty}>{retrieval.ner_entities.length > 0 ? 'NER 已命中' : '无匹配'}</div>
                     : retrieval.fuzzy_entities.map(e => (
@@ -344,11 +378,43 @@ export default function DebugPage({ isActive = true }: { isActive?: boolean }) {
                 <div className={styles.section}>
                   <div className={styles.sectionTitle}>
                     命中节点
+                    <span className={styles.sectionHint}>「度」= 图谱中的连接数，越高关联越丰富</span>
                     <span className={styles.count}>{retrieval.matched_graph_nodes.filter(n => n.match_reason !== 'graph_neighbor').length}命中+{retrieval.matched_graph_nodes.filter(n => n.match_reason === 'graph_neighbor').length}邻居</span>
                   </div>
                   {retrieval.matched_graph_nodes.length === 0
                     ? <div className={styles.empty}>无命中</div>
-                    : retrieval.matched_graph_nodes.map((n, i) => <NodeRow key={i} node={n} />)}
+                    : (() => {
+                        // Group: each hit node followed by its neighbors
+                        const groups: Array<{ hit: MatchedGraphNode; neighbors: MatchedGraphNode[] }> = []
+                        let current: { hit: MatchedGraphNode; neighbors: MatchedGraphNode[] } | null = null
+                        for (const n of retrieval.matched_graph_nodes) {
+                          if (n.match_reason !== 'graph_neighbor') {
+                            current = { hit: n, neighbors: [] }
+                            groups.push(current)
+                          } else if (current) {
+                            current.neighbors.push(n)
+                          }
+                        }
+                        return groups.map((g, gi) => (
+                          <div key={gi} className={styles.nodeGroup}>
+                            <NodeRow node={g.hit} onEntityClick={setModalEntity} />
+                            {g.neighbors.length > 0 && (
+                              <div className={styles.neighborList}>
+                                {g.neighbors.map((nb, ni) => (
+                                  <div key={ni} className={styles.neighborRow}>
+                                    <div className={styles.neighborConnector}>
+                                      <div className={styles.neighborLine} />
+                                      <div className={styles.neighborArrow}>→</div>
+                                    </div>
+                                    <NodeRow node={nb} onEntityClick={setModalEntity} />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      })()
+                  }
                 </div>
                 {retrieval.graph_paths.length > 0 && (
                   <div className={styles.section}>
@@ -449,6 +515,7 @@ export default function DebugPage({ isActive = true }: { isActive?: boolean }) {
         </div>
       )}
       </div>
+      {modalEntity && <GraphEntityModal entity={modalEntity} onClose={() => setModalEntity(null)} />}
     </div>
   )
 }
