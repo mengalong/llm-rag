@@ -56,7 +56,7 @@ function BotAvatar() {
 /** User avatar — cheerful orange fox character */
 function UserAvatar() {
   return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+    <svg className={styles.userAvatar} width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="16" cy="16" r="16" fill="#f97316"/>
       {/* ears */}
       <polygon points="7,14 11,7 13,14" fill="#fb923c"/>

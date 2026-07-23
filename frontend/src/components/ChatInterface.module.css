@@ -39,7 +39,14 @@
   align-items: flex-start;
 }
 .msgRow.user {
+  position: relative;
   justify-content: flex-end;
+}
+.userAvatar {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 10px);
+  flex-shrink: 0;
 }
 .bubble {
   flex: 1;
@@ -52,6 +59,7 @@
 .bubble.user {
   flex: none;
   max-width: 75%;
+  margin-left: auto;
   padding: 10px 14px;
   border-radius: 14px;
   border-bottom-right-radius: 4px;
@@ -325,3 +333,15 @@
   text-decoration: underline;
 }
 
+/* Keep the avatar outside the shared message-content boundary on narrow views,
+   while reserving enough viewport space so the scroll container does not clip it. */
+@media (max-width: 976px) {
+  .messages {
+    padding-right: 58px;
+  }
+
+  .messagesInner {
+    margin-right: 0;
+    margin-left: auto;
+  }
+}
