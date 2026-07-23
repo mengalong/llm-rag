@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import cytoscape, { type Core } from 'cytoscape'
-import { getSubgraph, type GraphData } from '../api/client'
+import { getSubgraph, getSubgraphByVersion, type GraphData } from '../api/client'
 import styles from './GraphEntityModal.module.css'
 
 const TYPE_COLOR: Record<string, string> = {
@@ -35,9 +35,10 @@ function defaultFontSize(sizeIdx = 0): number {
 interface Props {
   entity: string
   onClose: () => void
+  version?: string  // if set, query from historical snapshot
 }
 
-export default function GraphEntityModal({ entity: initialEntity, onClose }: Props) {
+export default function GraphEntityModal({ entity: initialEntity, onClose, version }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const [currentEntity, setCurrentEntity] = useState(initialEntity)
@@ -65,11 +66,14 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
     setLoading(true)
     setNotFound(false)
     setData(null)
-    getSubgraph(label, 2)
+    const fetch = version
+      ? getSubgraphByVersion(label, version, 2)
+      : getSubgraph(label, 2)
+    fetch
       .then((r) => setData(r.data))
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false))
-  }, [])
+  }, [version])
 
   useEffect(() => { loadEntity(currentEntity) }, [currentEntity])
 
@@ -256,7 +260,13 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
 
         <div className={styles.body}>
           {loading && <div className={styles.center}>加载中...</div>}
-          {notFound && <div className={styles.center}>图谱中未找到「{currentEntity}」</div>}
+          {notFound && (
+            <div className={styles.center}>
+              {version
+                ? `「${currentEntity}」在快照 ${version} 中不存在`
+                : `图谱中未找到「${currentEntity}」`}
+            </div>
+          )}
           {!loading && !notFound && data && data.nodes.length === 0 && (
             <div className={styles.center}>该实体暂无关系数据</div>
           )}

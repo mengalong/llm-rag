@@ -295,6 +295,8 @@ export const loadGraphSnapshot = (version: string) =>
 export const graphEventsUrl = () => `/api/v1/graph/events`
 export const searchGraphEntities = (keyword: string) =>
   api.get<GraphSearchResult>('/graph/search', { params: { q: keyword } })
+export const getSubgraphByVersion = (entity: string, version: string, depth = 2) =>
+  api.get<GraphData>('/graph/subgraph-version', { params: { entity, version, depth } })
 export const debugQueryStream = (question: string, topK: number) =>
   `/api/v1/query/debug/stream?question=${encodeURIComponent(question)}&top_k=${topK}`
 

@@ -62,7 +62,7 @@ def _confirm_plan(skip_llm: bool, indexed_count: int, doc_names: list[str]) -> b
 async def main(skip_llm: bool = False):
     from app.config import settings
     from app.db.file_store import FileStore
-    from app.core.graph_store import get_graph, save_graph
+    from app.core.kuzu_store import get_graph, save_graph, save_snapshot, get_conn
     from app.core.graph_builders import get_graph_builder
     from app.models.document import Chunk, ChunkMetadata
 
@@ -88,11 +88,16 @@ async def main(skip_llm: bool = False):
     else:
         builder_factory = get_graph_builder
 
-    # Clear the existing graph
-    import networkx as nx
-    import app.core.graph_store as gs
-    gs._graph = nx.Graph()
-    logger.info("Cleared existing graph")
+    # Clear the existing graph by deleting the live kuzu file and reinitialising
+    import app.core.kuzu_store as ks
+    from app.core.kuzu_store import _reset_conn, _live_db_path, get_conn as _get_conn
+
+    live_path = _live_db_path()
+    _reset_conn()
+    if live_path.exists():
+        live_path.unlink()  # Kuzu is a single file
+    _get_conn()  # re-init with fresh empty schema
+    logger.info("Cleared existing Kuzu graph")
 
     store = store_preview  # reuse the already-initialized store
     docs = await store.list_all()
@@ -132,14 +137,13 @@ async def main(skip_llm: bool = False):
 
     g = get_graph()
     logger.info("Rebuild complete — nodes: %d, edges: %d", g.number_of_nodes(), g.number_of_edges())
-    save_graph()
+    # graph is already persisted in kuzu; save_graph() is a no-op here but kept for clarity
+    save_graph(g)
 
     # Save a snapshot after successful rebuild
-    from app.core.graph_store import save_snapshot
     from app.core.graph_config import graph_cfg
     doc_names = [d.filename for d in indexed]
     effective_strategy = "ner_llm(no-llm)" if skip_llm else graph_cfg.builder_strategy
-    # Only record ner_model when spaCy is actually used
     uses_ner = effective_strategy in ("ner_llm", "ner_llm(no-llm)")
     version = save_snapshot(
         skip_llm=skip_llm,

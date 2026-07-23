@@ -1,6 +1,6 @@
 BACKEND_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))backend
 
-.PHONY: install dev-backend dev-frontend dev reset-db check rebuild-graph help
+.PHONY: install dev-backend dev-frontend dev reset-db check rebuild-graph migrate-kuzu help
 
 help:
 	@echo "Available targets:"
@@ -12,6 +12,7 @@ help:
 	@echo "  reset-db        Delete all data (uploads, chroma, graph, sqlite)"
 	@echo "  rebuild-graph   Rebuild knowledge graph from all indexed documents"
 	@echo "                  Skip LLM extraction: make rebuild-graph no-llm=1"
+	@echo "  migrate-kuzu    Migrate GraphML snapshots to Kuzu format"
 
 install:
 	cd backend && conda run -n llm-rag pip install -r requirements.txt
@@ -38,3 +39,6 @@ reset-db:
 
 rebuild-graph:
 	cd backend && conda run --no-capture-output -n llm-rag python -m scripts.rebuild_graph $(if $(no-llm),--no-llm,)
+
+migrate-kuzu:
+	cd backend && conda run --no-capture-output -n llm-rag python -m scripts.migrate_to_kuzu

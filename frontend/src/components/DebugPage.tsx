@@ -515,7 +515,13 @@ export default function DebugPage({ isActive = true }: { isActive?: boolean }) {
         </div>
       )}
       </div>
-      {modalEntity && <GraphEntityModal entity={modalEntity} onClose={() => setModalEntity(null)} />}
+      {modalEntity && (
+        <GraphEntityModal
+          entity={modalEntity}
+          onClose={() => setModalEntity(null)}
+          version={sessionMeta?.graph_version}
+        />
+      )}
     </div>
   )
 }

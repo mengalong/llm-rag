@@ -4,7 +4,7 @@ import re
 
 from ..config import settings
 from ..models.query import QueryResponse, Source, GraphPath
-from .graph_store import get_graph
+from .kuzu_store import get_graph
 from .graph_builder import _node_id, _get_nlp
 from .graph_config import graph_cfg
 

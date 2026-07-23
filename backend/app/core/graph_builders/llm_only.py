@@ -6,7 +6,7 @@ import logging
 
 from ...models.document import Chunk
 from ...config import settings
-from ..graph_store import get_graph, save_graph
+from ..kuzu_store import get_graph, save_graph
 from ..graph_config import graph_cfg
 from .base import GraphBuilderBase
 

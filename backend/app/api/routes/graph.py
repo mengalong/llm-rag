@@ -3,10 +3,11 @@ import json
 import asyncio
 from collections import Counter
 
-from ...core.graph_store import (
+from ...core.kuzu_store import (
     get_graph, to_graph_data, get_subgraph, get_subgraph_by_document,
     list_snapshots, load_snapshot_meta, diff_snapshots, delete_snapshot,
     get_current_version_from_graph, load_snapshot_as_current,
+    get_subgraph_by_version, get_conn,
 )
 from ...models.graph import GraphData, GraphStats, GraphOverview, EntityTypeStat, RelationStat, GraphEntityCategories, EntityDetail
 
@@ -28,12 +29,14 @@ TYPE_COLOR = {
 
 @router.get("/current-version")
 async def current_graph_version():
-    """Return current loaded graph version from embedded tag in graphml."""
+    """Return current loaded graph version."""
     from ...core.graph_config import graph_cfg
 
     version = get_current_version_from_graph()
     meta = load_snapshot_meta(version) if version not in ("unknown", "v0") else {}
-    node_count = meta.get("node_count", get_graph().number_of_nodes())
+    conn = get_conn()
+    res = conn.execute("MATCH (e:Entity) RETURN count(e)")
+    node_count = meta.get("node_count", res.get_next()[0] if res.has_next() else 0)
 
     return {
         "version": version,
@@ -87,13 +90,17 @@ async def graph_events(request: Request):
 
 @router.get("/overview", response_model=GraphOverview)
 async def graph_overview():
+    conn = get_conn()
+    from collections import Counter
+    import json as _json
+
     g = get_graph()
     type_counter: Counter = Counter()
     doc_ids: set = set()
     for _, data in g.nodes(data=True):
         t = data.get("type", "ENTITY")
         type_counter[t] += 1
-        for did in json.loads(data.get("document_ids", "[]")):
+        for did in _json.loads(data.get("document_ids", "[]")):
             doc_ids.add(did)
 
     relation_counter: Counter = Counter()
@@ -154,6 +161,22 @@ async def subgraph(entity: str = Query(...), depth: int = Query(2, ge=1, le=5)):
     sub = get_subgraph(entity, depth)
     if sub.number_of_nodes() == 0:
         raise HTTPException(status_code=404, detail=f"Entity '{entity}' not found in graph")
+    return to_graph_data(sub)
+
+
+@router.get("/subgraph-version", response_model=GraphData)
+async def subgraph_by_version(
+    entity: str = Query(...),
+    depth: int = Query(2, ge=1, le=5),
+    version: str = Query(...),
+):
+    """Query subgraph from a historical snapshot version."""
+    try:
+        sub = get_subgraph_by_version(entity, depth, version)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    if sub.number_of_nodes() == 0:
+        raise HTTPException(status_code=404, detail=f"Entity '{entity}' not found in snapshot '{version}'")
     return to_graph_data(sub)
 
 

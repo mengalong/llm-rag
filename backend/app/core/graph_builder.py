@@ -10,7 +10,7 @@ import json
 import logging
 
 from ..models.document import Chunk
-from .graph_store import get_graph, save_graph
+from .kuzu_store import get_graph, save_graph
 from .graph_config import graph_cfg
 
 logger = logging.getLogger("rag.graph")
