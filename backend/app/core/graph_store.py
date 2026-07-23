@@ -87,6 +87,7 @@ def save_snapshot(
     documents: list[str],
     note: str = "",
     ner_model: str = "zh_core_web_sm",
+    strategy: str = "",
 ) -> str:
     """Copy current graph + write .meta.json. Returns the version string."""
     g = get_graph()
@@ -115,6 +116,7 @@ def save_snapshot(
     meta: dict[str, Any] = {
         "version": version,
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "strategy": strategy or ("ner_llm(no-llm)" if skip_llm else "ner_llm"),
         "ner_model": ner_model,
         "llm_model": settings.effective_graph_llm_model if not skip_llm else None,
         "llm_base_url": settings.llm_base_url if not skip_llm else None,

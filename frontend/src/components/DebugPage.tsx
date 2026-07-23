@@ -80,7 +80,7 @@ export function DebugSidebarList({ records, selectedRecordId, onSelectRecord, on
         {records.length === 0 && <div className={styles.historyEmpty}>暂无记录</div>}
         {records.map(r => {
           const nerShort = (r.graph_ner_model ?? 'sm').replace('zh_core_web_', '')
-          const strategy = r.graph_skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
+          const strategy = r.graph_strategy || (r.graph_ner_model ? `NER·${nerShort}+LLM` : 'ner_llm')
           const llmShort = (r.qa_llm_model ?? '').split(/[\s/-]/).pop() ?? ''
           const ts = new Date(r.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
           return (
@@ -298,7 +298,7 @@ export default function DebugPage() {
           <div className={styles.metaBanner}>
             <span className={styles.metaItem}>图谱 <strong>{sessionMeta.graph_version}</strong></span>
             <span className={styles.metaSep}>·</span>
-            <span className={styles.metaItem}>{sessionMeta.graph_skip_llm !== false ? `NER·${(sessionMeta.graph_ner_model ?? 'sm').replace('zh_core_web_', '')}` : `NER·${(sessionMeta.graph_ner_model ?? 'sm').replace('zh_core_web_', '')}+LLM`}</span>
+            <span className={styles.metaItem}>{sessionMeta.graph_strategy || (sessionMeta.graph_ner_model ? `NER·${(sessionMeta.graph_ner_model ?? 'sm').replace('zh_core_web_', '')}+LLM` : 'ner_llm')}</span>
             {sessionMeta.graph_llm_model && (
               <><span className={styles.metaSep}>·</span><span className={styles.metaItem}>图谱LLM {sessionMeta.graph_llm_model}</span></>
             )}

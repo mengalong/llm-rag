@@ -79,7 +79,9 @@ export default function GraphOverviewPanel({
             if (!snap) return null
             const isNewer = idx === 1
             const nerShort = (snap.ner_model ?? 'sm').replace('zh_core_web_', '')
-            const strategy = snap.skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
+            const strategyLabel = snap.strategy
+              ? snap.strategy
+              : snap.skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
             const llmModel = !snap.skip_llm ? (snap.llm_model ?? '') : ''
             const ts = new Date(snap.timestamp).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
             return (
@@ -91,7 +93,7 @@ export default function GraphOverviewPanel({
                     <span className={styles.currentVersionTs}>{ts}</span>
                   </div>
                   <div className={styles.currentVersionRow}>
-                    <span className={styles.currentVersionMeta}>构建策略：{strategy}</span>
+                    <span className={styles.currentVersionMeta}>构建策略：{strategyLabel}</span>
                     {llmModel && <span className={styles.currentVersionMeta}>LLM：{llmModel}</span>}
                     <span className={styles.currentVersionMeta}>NER：{snap.ner_model ?? 'zh_core_web_sm'}</span>
                   </div>
@@ -131,10 +133,12 @@ export default function GraphOverviewPanel({
               <div className={styles.currentVersionRow}>
                 {(() => {
                   const nerShort = (activeSnap.ner_model ?? 'sm').replace('zh_core_web_', '')
-                  const strategy = activeSnap.skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
+                  const strategyLabel = activeSnap.strategy
+                    ? activeSnap.strategy
+                    : activeSnap.skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
                   const llmModel = !activeSnap.skip_llm ? (activeSnap.llm_model ?? '') : ''
                   return <>
-                    <span className={styles.currentVersionMeta}>构建策略：{strategy}</span>
+                    <span className={styles.currentVersionMeta}>构建策略：{strategyLabel}</span>
                     {llmModel && <span className={styles.currentVersionMeta}>LLM：{llmModel}</span>}
                     <span className={styles.currentVersionMeta}>NER：{activeSnap.ner_model ?? 'zh_core_web_sm'}</span>
                   </>
@@ -249,15 +253,15 @@ export default function GraphOverviewPanel({
                                   ))}
                                 </div>
                                 {typeDetail.items.length < typeDetail.total && (
-                                  <div className={styles.categoryLoadMore}>
-                                    <span className={styles.categoryLoadMoreHint}>已显示 {typeDetail.items.length} / {typeDetail.total}</span>
-                                    <button
-                                      className={styles.categoryLoadMoreBtn}
-                                      onClick={e => { e.stopPropagation(); loadMore() }}
-                                      disabled={typeDetailLoading}
-                                    >
-                                      {typeDetailLoading ? '加载中...' : '加载更多'}
-                                    </button>
+                                  <div
+                                    className={`${styles.categoryLoadMore} ${typeDetailLoading ? styles.categoryLoadMoreLoading : ''}`}
+                                    onClick={e => { e.stopPropagation(); if (!typeDetailLoading) loadMore() }}
+                                  >
+                                    <span className={styles.categoryLoadMoreCenter}>
+                                      {typeDetailLoading
+                                        ? '加载中...'
+                                        : `加载更多（已显示 ${typeDetail.items.length} / ${typeDetail.total}）`}
+                                    </span>
                                   </div>
                                 )}
                               </>

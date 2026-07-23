@@ -18,12 +18,62 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("rebuild_graph")
 
 
+def _confirm_plan(skip_llm: bool, indexed_count: int, doc_names: list[str]) -> bool:
+    """Print build plan and ask user to confirm. Returns True if confirmed."""
+    from app.config import settings
+    from app.core.graph_config import graph_cfg
+
+    strategy = "ner_llm (仅 NER，跳过 LLM)" if skip_llm else graph_cfg.builder_strategy
+    llm_model = settings.effective_graph_llm_model
+    llm_base_url = graph_cfg.graph_llm_base_url or settings.llm_base_url
+
+    print("\n" + "=" * 60)
+    print("  知识图谱重建计划")
+    print("=" * 60)
+    print(f"  策略:       {strategy}")
+    if not skip_llm:
+        if strategy == "ner_llm":
+            print(f"  NER 模型:   {graph_cfg.ner_model}")
+            print(f"  LLM 模型:   {llm_model}  ({llm_base_url})")
+        elif strategy == "llm_only":
+            cfg = graph_cfg._ex.get("llm_only", {})
+            print(f"  LLM 模型:   {llm_model}  ({llm_base_url})")
+            print(f"  batch_size: {cfg.get('batch_size', 3)}   concurrency: {cfg.get('concurrency', 3)}")
+        else:
+            print(f"  LLM 模型:   {llm_model}  ({llm_base_url})")
+    print(f"  文档数量:   {indexed_count} 篇")
+    if doc_names:
+        for name in doc_names[:5]:
+            print(f"    - {name}")
+        if len(doc_names) > 5:
+            print(f"    ... 以及 {len(doc_names) - 5} 篇")
+    print("=" * 60)
+    print("  注意：此操作会清空现有图谱并从头重建")
+    print("=" * 60 + "\n")
+
+    try:
+        answer = input("确认继续？[y/N] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+    return answer in ("y", "yes")
+
+
 async def main(skip_llm: bool = False):
     from app.config import settings
     from app.db.file_store import FileStore
     from app.core.graph_store import get_graph, save_graph
     from app.core.graph_builders import get_graph_builder
     from app.models.document import Chunk, ChunkMetadata
+
+    # Show plan and ask for confirmation before doing anything destructive
+    store_preview = FileStore(settings.db_path)
+    await store_preview.init()
+    docs_preview = await store_preview.list_all()
+    indexed_preview = [d for d in docs_preview if d.status == "indexed"]
+    if not _confirm_plan(skip_llm, len(indexed_preview), [d.filename for d in indexed_preview]):
+        print("已取消。")
+        return
 
     # --no-llm: temporarily force ner_llm strategy without LLM extraction
     if skip_llm:
@@ -44,8 +94,7 @@ async def main(skip_llm: bool = False):
     gs._graph = nx.Graph()
     logger.info("Cleared existing graph")
 
-    store = FileStore(settings.db_path)
-    await store.init()
+    store = store_preview  # reuse the already-initialized store
     docs = await store.list_all()
     indexed = [d for d in docs if d.status == "indexed"]
     logger.info("Found %d indexed documents", len(indexed))
@@ -89,12 +138,14 @@ async def main(skip_llm: bool = False):
     from app.core.graph_store import save_snapshot
     from app.core.graph_config import graph_cfg
     doc_names = [d.filename for d in indexed]
+    effective_strategy = "ner_llm(no-llm)" if skip_llm else graph_cfg.builder_strategy
     version = save_snapshot(
         skip_llm=skip_llm,
         documents=doc_names,
         ner_model=graph_cfg.ner_model,
+        strategy=effective_strategy,
     )
-    logger.info("Snapshot saved: %s", version)
+    logger.info("Snapshot saved: %s (strategy=%s)", version, effective_strategy)
 
 
 if __name__ == "__main__":

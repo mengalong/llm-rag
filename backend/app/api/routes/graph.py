@@ -16,11 +16,13 @@ TYPE_LABEL = {
     'PERSON': '人物', 'ORG': '组织', 'GPE': '地点',
     'PRODUCT': '产品', 'LOC': '位置', 'ENTITY': '实体',
     'WORK_OF_ART': '作品', 'EVENT': '事件', 'FAC': '设施', 'NORP': '群体',
+    'CONCEPT': '概念',
 }
 TYPE_COLOR = {
     'PERSON': '#a78bfa', 'ORG': '#60a5fa', 'GPE': '#34d399',
     'PRODUCT': '#fb923c', 'LOC': '#f472b6', 'ENTITY': '#94a3b8',
     'WORK_OF_ART': '#f9a8d4', 'EVENT': '#fbbf24', 'FAC': '#6ee7b7', 'NORP': '#93c5fd',
+    'CONCEPT': '#67e8f9',
 }
 
 
@@ -168,6 +170,7 @@ async def entity_categories():
 
     g = get_graph()
     NER_TYPES = {'PERSON', 'ORG', 'GPE', 'PRODUCT', 'LOC', 'WORK_OF_ART', 'EVENT', 'FAC', 'NORP'}
+    LLM_TYPES = {'ENTITY', 'CONCEPT'}
 
     ner_groups: dict[str, list[str]] = {}
     llm_labels: list[str] = []
@@ -180,6 +183,7 @@ async def entity_categories():
         if t in NER_TYPES:
             ner_groups.setdefault(t, []).append(label)
         else:
+            # ENTITY, CONCEPT, and any unknown type → LLM bucket
             llm_labels.append(label)
 
     ner_nodes = [
@@ -223,14 +227,20 @@ async def entities_by_type(
 
     g = get_graph()
     NER_TYPES = {'PERSON', 'ORG', 'GPE', 'PRODUCT', 'LOC', 'WORK_OF_ART', 'EVENT', 'FAC', 'NORP'}
+    LLM_TYPES = {'ENTITY', 'CONCEPT'}
 
-    # resolve type: "LLM" maps to ENTITY, otherwise use as-is
-    target_type = "ENTITY" if entity_type.upper() == "LLM" else entity_type.upper()
-
-    nodes = [
-        (nid, data) for nid, data in g.nodes(data=True)
-        if data.get("type", "ENTITY") == target_type
-    ]
+    # "LLM" is a virtual bucket: match all non-NER types (ENTITY, CONCEPT, …)
+    if entity_type.upper() == "LLM":
+        nodes = [
+            (nid, data) for nid, data in g.nodes(data=True)
+            if data.get("type", "ENTITY") not in NER_TYPES
+        ]
+    else:
+        target_type = entity_type.upper()
+        nodes = [
+            (nid, data) for nid, data in g.nodes(data=True)
+            if data.get("type", "ENTITY") == target_type
+        ]
     # sort by degree desc (most connected first)
     nodes.sort(key=lambda x: g.degree(x[0]), reverse=True)
     total = len(nodes)

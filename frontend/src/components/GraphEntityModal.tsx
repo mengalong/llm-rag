@@ -22,7 +22,7 @@ const TYPE_LABEL: Record<string, string> = {
 const SIZES = [
   { label: '标准', w: 'calc(100vw - 48px)', h: 'calc(100vh - 48px)', fullscreen: false },
   { label: '全屏', w: '100vw', h: '100vh', fullscreen: true },
-  { label: '小窗', w: '680px', h: '520px', fullscreen: false },
+  { label: '小窗', w: '700px', h: '560px', fullscreen: false },
 ]
 
 interface Props {
@@ -39,6 +39,14 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [sizeIdx, setSizeIdx] = useState(0)
+
+  // Re-fit the graph whenever the modal size changes
+  const fitGraph = useCallback(() => {
+    if (cyRef.current) {
+      cyRef.current.resize()
+      cyRef.current.fit(undefined, 48)
+    }
+  }, [])
 
   const loadEntity = useCallback((label: string) => {
     setLoading(true)
@@ -99,7 +107,7 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
           style: {
             'background-color': 'data(color)',
             label: 'data(label)',
-            'font-size': 10,
+            'font-size': sizeIdx === 2 ? 11 : 13,
             'font-family': '"Inter", "SF Pro Display", -apple-system, sans-serif',
             'font-weight': '600',
             color: '#fff',
@@ -109,11 +117,11 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
             'text-outline-color': 'data(color)',
             width: 'label',
             height: 'label',
-            'padding': '8px',
+            'padding': sizeIdx === 2 ? '9px' : '11px',
             shape: 'round-rectangle',
             'border-width': 0,
-            'min-width': 32,
-            'min-height': 24,
+            'min-width': sizeIdx === 2 ? 36 : 44,
+            'min-height': sizeIdx === 2 ? 28 : 32,
             cursor: 'pointer',
           } as any,
         },
@@ -125,7 +133,7 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
             'border-width': 3,
             'border-color': '#ffffff',
             'border-opacity': 1,
-            'font-size': 11,
+            'font-size': sizeIdx === 2 ? 12 : 14,
             'font-weight': '700',
             'z-compound-depth': 'top',
           } as any,
@@ -138,10 +146,10 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
             'line-opacity': 0.4,
             'target-arrow-color': '#64748b',
             'target-arrow-shape': 'triangle',
-            'arrow-scale': 0.6,
+            'arrow-scale': 0.7,
             'curve-style': 'bezier',
             label: 'data(label)',
-            'font-size': 8,
+            'font-size': sizeIdx === 2 ? 9 : 11,
             'font-family': '"Inter", -apple-system, sans-serif',
             color: '#94a3b8',
             'text-rotation': 'autorotate',
@@ -159,9 +167,9 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
         animate: true,
         animationDuration: 450,
         randomize: false,
-        nodeRepulsion: () => 12000,
-        nodeOverlap: 20,
-        idealEdgeLength: () => 120,
+        nodeRepulsion: () => 14000,
+        nodeOverlap: 24,
+        idealEdgeLength: () => sizeIdx === 2 ? 100 : 140,
         edgeElasticity: () => 100,
         nestingFactor: 1.2,
         gravity: 80,
@@ -169,7 +177,7 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
         coolingFactor: 0.99,
         minTemp: 1.0,
         fit: true,
-        padding: 48,
+        padding: sizeIdx === 2 ? 32 : 56,
       } as any,
     })
 
@@ -180,7 +188,7 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
 
     cyRef.current = cy
     return () => { cy.destroy(); cyRef.current = null }
-  }, [data, currentEntity])
+  }, [data, currentEntity, sizeIdx])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -193,6 +201,12 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
 
   const usedTypes = [...new Set((data?.nodes ?? []).map((n) => n.type))]
   const sz = SIZES[sizeIdx]
+
+  const handleSizeChange = (idx: number) => {
+    setSizeIdx(idx)
+    // Wait one frame for layout to settle, then re-fit
+    requestAnimationFrame(() => { requestAnimationFrame(fitGraph) })
+  }
 
   return (
     <div
@@ -217,7 +231,7 @@ export default function GraphEntityModal({ entity: initialEntity, onClose }: Pro
               <button
                 key={s.label}
                 className={`${styles.resizeBtn} ${sizeIdx === i ? styles.resizeBtnActive : ''}`}
-                onClick={() => setSizeIdx(i)}
+                onClick={() => handleSizeChange(i)}
               >{s.label}</button>
             ))}
           </div>

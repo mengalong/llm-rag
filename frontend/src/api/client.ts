@@ -210,6 +210,7 @@ export interface EntityTypePageResult {
 export interface GraphSnapshot {
   version: string
   timestamp: string
+  strategy: string
   ner_model: string
   llm_model: string | null
   skip_llm: boolean

@@ -4,10 +4,10 @@
 extraction:
   # 图谱构建策略：ner_llm | llm_only | lightrag | graphrag
   # - ner_llm:  spaCy NER 提实体 + LLM 提关系（当前默认，生产可用）
-  # - llm_only: LLM 一次性提实体+关系（开发中，设置后会报 NotImplementedError）
+  # - llm_only: LLM 一次性提实体+关系（已实现，支持 batch_size + concurrency）
   # - lightrag: LightRAG 框架（预留接口，需安装 lightrag-hku）
   # - graphrag:  Microsoft GraphRAG（预留接口，需安装 graphrag）
-  strategy: ner_llm
+  strategy: llm_only
 
   # spaCy NER 模型名称（仅 ner_llm 策略使用）
   # zh_core_web_sm:  轻量，速度快，准确率一般（默认）
