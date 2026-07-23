@@ -170,6 +170,7 @@ function AppInner() {
               onSessionSelect={handleSessionSelect}
               onNewSession={handleNewSession}
               onDeleteSession={handleDeleteSession}
+              isActive={activeTab === 'chat'}
             />
           </div>
           {activeTab === 'docs' && (

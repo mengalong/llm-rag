@@ -26,6 +26,7 @@ interface Props {
   onSessionSelect: (id: string) => void
   onNewSession: () => void
   onDeleteSession: (id: string) => void
+  isActive: boolean
 }
 
 /** Robot avatar for AI messages */
@@ -149,10 +150,12 @@ function MarkdownWithCitations({ content, onCite, raw }: MarkdownWithCitationsPr
 export default function ChatInterface({
   session, onSessionUpdate, onSessionTitleUpdate,
   sessions, activeSessionId, onSessionSelect, onNewSession, onDeleteSession,
+  isActive,
 }: Props) {
   const { setSidebarContent } = useSidebar()
 
   useEffect(() => {
+    if (!isActive) return
     setSidebarContent(
       <SessionListSidebar
         sessions={sessions}
@@ -163,7 +166,7 @@ export default function ChatInterface({
       />
     )
     return () => setSidebarContent(null)
-  }, [sessions, activeSessionId, onSessionSelect, onNewSession, onDeleteSession])
+  }, [isActive, sessions, activeSessionId, onSessionSelect, onNewSession, onDeleteSession])
   const [input, setInput] = useState('')
   const [useGraph, setUseGraph] = useState(true)
   const [rawMsgIds, setRawMsgIds] = useState<Set<number>>(new Set())
