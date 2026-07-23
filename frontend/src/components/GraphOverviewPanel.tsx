@@ -78,11 +78,12 @@ export default function GraphOverviewPanel({
             const snap = snapshots.find(s => s.version === ver)
             if (!snap) return null
             const isNewer = idx === 1
-            const nerShort = (snap.ner_model ?? 'sm').replace('zh_core_web_', '')
+            const nerShort = (snap.ner_model ?? '').replace('zh_core_web_', '')
             const strategyLabel = snap.strategy
               ? snap.strategy
               : snap.skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
             const llmModel = !snap.skip_llm ? (snap.llm_model ?? '') : ''
+            const showNer = !!snap.ner_model && (!snap.strategy || snap.strategy.startsWith('ner_llm'))
             const ts = new Date(snap.timestamp).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
             return (
               <div key={ver} className={`${styles.snapshotOverviewCard} ${isNewer ? styles.snapshotOverviewCardNew : styles.snapshotOverviewCardOld}`}>
@@ -95,7 +96,7 @@ export default function GraphOverviewPanel({
                   <div className={styles.currentVersionRow}>
                     <span className={styles.currentVersionMeta}>构建策略：{strategyLabel}</span>
                     {llmModel && <span className={styles.currentVersionMeta}>LLM：{llmModel}</span>}
-                    <span className={styles.currentVersionMeta}>NER：{snap.ner_model ?? 'zh_core_web_sm'}</span>
+                    {showNer && <span className={styles.currentVersionMeta}>NER：{snap.ner_model}</span>}
                   </div>
                 </div>
                 <div className={styles.overviewCardGridInner}>
@@ -132,15 +133,18 @@ export default function GraphOverviewPanel({
               </div>
               <div className={styles.currentVersionRow}>
                 {(() => {
-                  const nerShort = (activeSnap.ner_model ?? 'sm').replace('zh_core_web_', '')
+                  const nerShort = (activeSnap.ner_model ?? '').replace('zh_core_web_', '')
                   const strategyLabel = activeSnap.strategy
                     ? activeSnap.strategy
                     : activeSnap.skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
                   const llmModel = !activeSnap.skip_llm ? (activeSnap.llm_model ?? '') : ''
+                  const showNer = !!activeSnap.ner_model && (
+                    !activeSnap.strategy || activeSnap.strategy.startsWith('ner_llm')
+                  )
                   return <>
                     <span className={styles.currentVersionMeta}>构建策略：{strategyLabel}</span>
                     {llmModel && <span className={styles.currentVersionMeta}>LLM：{llmModel}</span>}
-                    <span className={styles.currentVersionMeta}>NER：{activeSnap.ner_model ?? 'zh_core_web_sm'}</span>
+                    {showNer && <span className={styles.currentVersionMeta}>NER：{activeSnap.ner_model}</span>}
                   </>
                 })()}
               </div>

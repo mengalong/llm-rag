@@ -173,17 +173,23 @@ function AppInner() {
               isActive={activeTab === 'chat'}
             />
           </div>
-          {activeTab === 'docs' && (
+          {/* Other tabs — keep mounted, hidden when not active, to preserve sidebar state */}
+          <div style={{ display: activeTab === 'docs' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             <DocumentsPage
               docs={docs}
               uploading={uploading}
               uploadProgress={uploadProgress}
               onUpload={(f, settings) => upload(f, settings)}
               onRefresh={refresh}
+              isActive={activeTab === 'docs'}
             />
-          )}
-          {activeTab === 'graph' && <GraphViewer docs={docs} />}
-          {activeTab === 'debug' && <DebugPage />}
+          </div>
+          <div style={{ display: activeTab === 'graph' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            <GraphViewer docs={docs} isActive={activeTab === 'graph'} />
+          </div>
+          <div style={{ display: activeTab === 'debug' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            <DebugPage isActive={activeTab === 'debug'} />
+          </div>
         </div>
       </main>
     </div>

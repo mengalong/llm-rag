@@ -9,6 +9,7 @@ interface Props {
   uploadProgress: number
   onUpload: (f: File, settings?: ChunkSettings) => void
   onRefresh: () => void
+  isActive?: boolean
 }
 
 const MIME_ICON: Record<string, string> = {
@@ -42,7 +43,7 @@ function fmtTime(iso: string | null, showDate = true): string {
   return d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', ...opts })
 }
 
-export default function DocumentsPage({ docs, uploading, uploadProgress, onUpload, onRefresh }: Props) {
+export default function DocumentsPage({ docs, uploading, uploadProgress, onUpload, onRefresh, isActive = true }: Props) {
   const { setSidebarContent } = useSidebar()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [chunks, setChunks] = useState<ChunkItem[]>([])
@@ -86,8 +87,9 @@ export default function DocumentsPage({ docs, uploading, uploadProgress, onUploa
   const toggleChunk = (id: string) => setExpandedChunks(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
   const filteredChunks = search.trim() ? chunks.filter(c => c.content.toLowerCase().includes(search.toLowerCase())) : chunks
 
-  // Inject sidebar
+  // Inject sidebar — only when active
   useEffect(() => {
+    if (!isActive) return
     setSidebarContent(
       <DocSidebar
         docs={docs} selectedId={selectedId} onSelectId={setSelectedId}
@@ -97,7 +99,7 @@ export default function DocumentsPage({ docs, uploading, uploadProgress, onUploa
       />
     )
     return () => setSidebarContent(null)
-  }, [docs, selectedId, uploading, uploadProgress, strategy, chunkSize, chunkOverlap])
+  }, [isActive, docs, selectedId, uploading, uploadProgress, strategy, chunkSize, chunkOverlap])
 
   return (
     <div className={styles.page}>

@@ -105,7 +105,7 @@ export function DebugSidebarList({ records, selectedRecordId, onSelectRecord, on
   )
 }
 
-export default function DebugPage() {
+export default function DebugPage({ isActive = true }: { isActive?: boolean }) {
   const { setSidebarContent } = useSidebar()
   const [question, setQuestion] = useState('')
   const [topK, setTopK] = useState(5)
@@ -248,8 +248,9 @@ export default function DebugPage() {
 
   useEffect(() => () => { esRef.current?.close() }, [])
 
-  // Inject sidebar
+  // Inject sidebar — only when active
   useEffect(() => {
+    if (!isActive) return
     setSidebarContent(
       <DebugSidebarList
         records={records}
@@ -264,7 +265,7 @@ export default function DebugPage() {
       />
     )
     return () => setSidebarContent(null)
-  }, [records, selectedRecordId])
+  }, [isActive, records, selectedRecordId])
 
   return (
     <div className={styles.page}>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import cytoscape, { type Core } from 'cytoscape'
 import {
   type GraphData, type GraphNode, type GraphOverview,
@@ -14,7 +14,7 @@ import GraphDiffPanel from './GraphDiffPanel'
 import { useSidebar } from '../context/SidebarContext'
 import styles from './GraphViewer.module.css'
 
-interface Props { docs: Document[] }
+interface Props { docs: Document[]; isActive?: boolean }
 
 const TYPE_COLOR: Record<string, string> = {
   PERSON:     '#818cf8',  // soft indigo
@@ -136,7 +136,7 @@ function GraphCanvas({ data, onNodeClick }: { data: GraphData; onNodeClick: (lab
   )
 }
 
-export default function GraphViewer({ docs }: Props) {
+export default function GraphViewer({ docs, isActive = true }: Props) {
   const { setSidebarContent } = useSidebar()
 
   // All state lives here — no lifting needed
@@ -159,15 +159,15 @@ export default function GraphViewer({ docs }: Props) {
   const [toast, setToast] = useState<string | null>(null)
   const esRef = useRef<EventSource | null>(null)
 
-  const refreshOverview = () => {
+  const refreshOverview = useCallback(() => {
     getGraphOverview().then(r => setOverview(r.data)).catch(console.error)
     getGraphEntityCategories().then(r => setCategories(r.data)).catch(console.error)
-  }
-  const refreshAll = () => {
+  }, [])
+  const refreshAll = useCallback(() => {
     refreshOverview()
     getGraphSnapshots().then(r => setSnapshots(r.data)).catch(console.error)
     fetch('/api/v1/graph/current-version').then(r => r.json()).then(d => setActiveVersion(d.version)).catch(console.error)
-  }
+  }, [refreshOverview])
 
   useEffect(() => {
     refreshAll()
@@ -194,24 +194,23 @@ export default function GraphViewer({ docs }: Props) {
     getGraphByDocument(selectedDocId).then(r => setDocGraphData(r.data)).catch(console.error).finally(() => setLoading(false))
   }, [selectedDocId])
 
-  const toggleDiffVersion = (v: string) => {
+  const toggleDiffVersion = useCallback((v: string) => {
     if (diffV1 === v) { setDiffV1(null); return }
     if (diffV2 === v) { setDiffV2(null); return }
     if (!diffV1) { setDiffV1(v); return }
     if (!diffV2) { setDiffV2(v); return }
     setDiffV1(diffV2); setDiffV2(v)
-  }
-  const runDiff = async () => {
+  }, [diffV1, diffV2])
+  const runDiff = useCallback(async () => {
     if (!diffV1 || !diffV2) return
     setDiffLoading(true); setDiffResult(null)
     const vn = (s: string) => parseInt(s.replace(/\D/g, ''), 10) || 0
     const [lo, hi] = vn(diffV1) <= vn(diffV2) ? [diffV1, diffV2] : [diffV2, diffV1]
     try { const r = await getGraphDiff(lo, hi); setDiffResult(r.data) } catch { /* ignore */ }
     finally { setDiffLoading(false) }
-  }
-  const clearDiff = () => { setDiffResult(null); setDiffV1(null); setDiffV2(null) }
-
-  const handleEntityClick = (label: string) => setModalEntity(label)
+  }, [diffV1, diffV2])
+  const clearDiff = useCallback(() => { setDiffResult(null); setDiffV1(null); setDiffV2(null) }, [])
+  const handleEntityClick = useCallback((label: string) => setModalEntity(label), [])
 
   const indexedDocs = docs.filter(d => d.status === 'indexed')
   const entities = useMemo<GraphNode[]>(() => {
@@ -225,9 +224,11 @@ export default function GraphViewer({ docs }: Props) {
     return groups
   }, [entities])
   const usedTypes = useMemo(() => [...new Set((docGraphData?.nodes ?? []).map(n => n.type))], [docGraphData])
+  const subgraphNodeIds = useMemo(() => subgraphData?.nodes.map(n => n.id) ?? [], [subgraphData])
 
-  // Inject sidebar content
+  // Inject sidebar content — only when this tab is active
   useEffect(() => {
+    if (!isActive) return
     setSidebarContent(
       <GraphSidebar
         snapshots={snapshots} activeVersion={activeVersion}
@@ -239,12 +240,13 @@ export default function GraphViewer({ docs }: Props) {
         indexedDocs={indexedDocs} selectedDocId={selectedDocId} onSelectDocId={id => setSelectedDocId(id === selectedDocId ? null : id)}
         filterType={filterType} onFilterTypeChange={setFilterType}
         docGraphData={docGraphData} groupedEntities={groupedEntities} usedTypes={usedTypes} entities={entities}
-        subgraphNodeIds={subgraphData?.nodes.map(n => n.id) ?? []}
+        subgraphNodeIds={subgraphNodeIds}
       />
     )
     return () => setSidebarContent(null)
-  }, [snapshots, activeVersion, diffV1, diffV2, diffLoading, diffResult, searchResult, searching,
-      indexedDocs, selectedDocId, filterType, docGraphData, groupedEntities, usedTypes, entities, subgraphData])
+  }, [isActive, snapshots, activeVersion, diffV1, diffV2, diffLoading, diffResult, searchResult, searching,
+      indexedDocs, selectedDocId, filterType, docGraphData, groupedEntities, usedTypes, entities,
+      subgraphNodeIds, refreshOverview, toggleDiffVersion, runDiff, clearDiff, handleEntityClick])
 
   // Right panel always shows overview — selecting a doc/entity doesn't replace it
   return (

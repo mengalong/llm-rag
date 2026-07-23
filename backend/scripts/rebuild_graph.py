@@ -139,10 +139,12 @@ async def main(skip_llm: bool = False):
     from app.core.graph_config import graph_cfg
     doc_names = [d.filename for d in indexed]
     effective_strategy = "ner_llm(no-llm)" if skip_llm else graph_cfg.builder_strategy
+    # Only record ner_model when spaCy is actually used
+    uses_ner = effective_strategy in ("ner_llm", "ner_llm(no-llm)")
     version = save_snapshot(
         skip_llm=skip_llm,
         documents=doc_names,
-        ner_model=graph_cfg.ner_model,
+        ner_model=graph_cfg.ner_model if uses_ner else "",
         strategy=effective_strategy,
     )
     logger.info("Snapshot saved: %s (strategy=%s)", version, effective_strategy)
