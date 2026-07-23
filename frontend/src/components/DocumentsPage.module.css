@@ -9,18 +9,42 @@
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  flex-wrap: wrap;
+  min-height: 44px;
 }
 .toolbarTitle {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
   flex-shrink: 0;
 }
+.toolbarMeta {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.toolbarSearch {
+  flex: 1;
+  min-width: 80px;
+  max-width: 220px;
+  padding: 4px 9px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+.toolbarSearch:focus { border-color: var(--accent); }
+.toolbarSearch::placeholder { color: var(--text-muted); }
 .strategyBtn {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -28,9 +52,11 @@
   color: var(--text-muted);
   cursor: pointer;
   font-size: 12px;
-  padding: 5px 12px;
+  padding: 4px 10px;
   transition: background 0.1s, color 0.1s;
   flex-shrink: 0;
+  margin-left: auto;
+  white-space: nowrap;
 }
 .strategyBtn:hover, .strategyBtnActive { background: var(--surface-hover); color: var(--text); }
 .dropzone {
@@ -68,6 +94,40 @@
 .strategyPanel {
   border-bottom: 1px solid var(--border);
   padding: 12px 16px;
+  background: var(--sidebar-bg);
+  flex-shrink: 0;
+}
+
+/* Sidebar strategy toggle row */
+.strategyToggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.strategyToggleLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.strategyToggleBtn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 7px;
+  transition: background 0.1s, color 0.1s;
+}
+.strategyToggleBtn:hover { background: var(--surface-hover); color: var(--text); }
+.strategyToggleBtnActive { background: var(--accent-subtle); color: var(--accent); border-color: var(--accent); }
+
+/* Strategy panel inside sidebar */
+.strategyPanelSidebar {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
   background: var(--sidebar-bg);
   flex-shrink: 0;
 }
@@ -211,23 +271,9 @@
   overflow: hidden;
   min-height: 0;
 }
-.detailHeader {
-  display: flex; align-items: center; gap: 10px;
-  padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
-}
-.detailTitle {
-  font-size: 14px; font-weight: 600; color: var(--text); flex: 1;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.detailMeta { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
-.searchBox { padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.searchInput {
-  width: 100%; padding: 6px 10px;
-  background: var(--input-bg); border: 1px solid var(--border);
-  border-radius: 6px; color: var(--text); font-size: 13px; outline: none;
-}
-.searchInput:focus { border-color: var(--accent); }
-.searchInput::placeholder { color: var(--text-muted); }
+.detailHeader { display: none; }
+.searchBox { display: none; }
+.searchInput { display: none; }
 .chunkScroll {
   flex: 1;
   overflow-y: auto;

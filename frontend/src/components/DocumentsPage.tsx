@@ -55,7 +55,6 @@ export default function DocumentsPage({ docs, uploading, uploadProgress, onUploa
   const [strategy, setStrategy] = useState<'recursive' | 'sentence' | 'fixed'>('recursive')
   const [chunkSize, setChunkSize] = useState(2000)
   const [chunkOverlap, setChunkOverlap] = useState(256)
-  const [showStrategyPanel, setShowStrategyPanel] = useState(false)
 
   useEffect(() => {
     const hasPending = docs.some(d => d.status === 'pending' || d.status === 'processing')
@@ -95,6 +94,7 @@ export default function DocumentsPage({ docs, uploading, uploadProgress, onUploa
         docs={docs} selectedId={selectedId} onSelectId={setSelectedId}
         uploading={uploading} uploadProgress={uploadProgress}
         strategy={strategy} chunkSize={chunkSize} chunkOverlap={chunkOverlap}
+        onStrategyChange={setStrategy} onChunkSizeChange={setChunkSize} onChunkOverlapChange={setChunkOverlap}
         onUpload={onUpload} onRefresh={onRefresh}
       />
     )
@@ -104,27 +104,23 @@ export default function DocumentsPage({ docs, uploading, uploadProgress, onUploa
   return (
     <div className={styles.page}>
       <div className={styles.toolbar}>
-        <span className={styles.toolbarTitle}>{selectedDoc ? selectedDoc.filename : '选择文档查看详情'}</span>
-        <button className={`${styles.strategyBtn} ${showStrategyPanel ? styles.strategyBtnActive : ''}`} onClick={() => setShowStrategyPanel(v => !v)}>
-          ⚙ 切片策略：{STRATEGY_LABELS[strategy]}
-        </button>
+        <span className={styles.toolbarTitle}>
+          {selectedDoc ? selectedDoc.filename : '选择文档查看详情'}
+        </span>
+        {selectedDoc && selectedDoc.status === 'indexed' && (
+          <span className={styles.toolbarMeta}>
+            {chunks.length} 片 · {STRATEGY_LABELS[selectedDoc.chunk_strategy ?? 'recursive']} · size={selectedDoc.chunk_size} overlap={selectedDoc.chunk_overlap}
+          </span>
+        )}
+        {selectedDoc && selectedDoc.status === 'indexed' && (
+          <input
+            className={styles.toolbarSearch}
+            placeholder="搜索切片..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        )}
       </div>
-      {showStrategyPanel && (
-        <div className={styles.strategyPanel}>
-          <div className={styles.strategyRow}>
-            {(['recursive', 'sentence', 'fixed'] as const).map(s => (
-              <button key={s} className={`${styles.strategyOption} ${strategy === s ? styles.strategyOptionActive : ''}`} onClick={() => setStrategy(s)}>
-                <span className={styles.strategyName}>{STRATEGY_LABELS[s]}</span>
-                <span className={styles.strategyHint}>{STRATEGY_HINTS[s]}</span>
-              </button>
-            ))}
-          </div>
-          <div className={styles.strategyParams}>
-            <label>切片大小（字符）<input type="number" min={100} max={8000} step={100} value={chunkSize} onChange={e => setChunkSize(Number(e.target.value))} /></label>
-            <label>重叠大小（字符）<input type="number" min={0} max={1000} step={50} value={chunkOverlap} onChange={e => setChunkOverlap(Number(e.target.value))} /></label>
-          </div>
-        </div>
-      )}
       <div className={styles.detailPane}>
         {!selectedDoc ? (
           <div className={styles.noSelect}>← 从左侧选择文档查看切片详情</div>
@@ -132,13 +128,6 @@ export default function DocumentsPage({ docs, uploading, uploadProgress, onUploa
           <div className={styles.noSelect}>{selectedDoc.status === 'error' ? `处理失败：${selectedDoc.error}` : '文档尚未完成索引'}</div>
         ) : (
           <>
-            <div className={styles.detailHeader}>
-              <span className={styles.detailTitle} title={selectedDoc.filename}>{selectedDoc.filename}</span>
-              <span className={styles.detailMeta}>{chunks.length} 片 · {STRATEGY_LABELS[selectedDoc.chunk_strategy ?? 'recursive']} · size={selectedDoc.chunk_size} overlap={selectedDoc.chunk_overlap}</span>
-            </div>
-            <div className={styles.searchBox}>
-              <input className={styles.searchInput} placeholder="搜索切片内容..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
             {chunksLoading ? <div className={styles.loadingChunks}>加载中...</div> : (
               <div className={styles.chunkScroll}>
                 {filteredChunks.map(chunk => (
@@ -164,13 +153,18 @@ export default function DocumentsPage({ docs, uploading, uploadProgress, onUploa
   )
 }
 
-function DocSidebar({ docs, selectedId, onSelectId, uploading, uploadProgress, onUpload, onRefresh, strategy, chunkSize, chunkOverlap }: {
+function DocSidebar({ docs, selectedId, onSelectId, uploading, uploadProgress, onUpload, onRefresh,
+  strategy, chunkSize, chunkOverlap, onStrategyChange, onChunkSizeChange, onChunkOverlapChange }: {
   docs: Document[]; selectedId: string | null; onSelectId: (id: string | null) => void
   uploading: boolean; uploadProgress: number
   onUpload: (f: File, settings?: ChunkSettings) => void; onRefresh: () => void
   strategy: string; chunkSize: number; chunkOverlap: number
+  onStrategyChange: (s: 'recursive' | 'sentence' | 'fixed') => void
+  onChunkSizeChange: (v: number) => void
+  onChunkOverlapChange: (v: number) => void
 }) {
   const [dragging, setDragging] = useState(false)
+  const [showStrategy, setShowStrategy] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFiles = (files: FileList | null) => {
@@ -196,6 +190,33 @@ function DocSidebar({ docs, selectedId, onSelectId, uploading, uploadProgress, o
           ? <div className={styles.uploadProgress}><div className={styles.uploadBar} style={{ width: `${uploadProgress}%` }} /><span>{uploadProgress}%</span></div>
           : <span>＋ 上传文档</span>}
       </div>
+
+      {/* Strategy config */}
+      <div className={styles.strategyToggleRow}>
+        <span className={styles.strategyToggleLabel}>切片策略：{STRATEGY_LABELS[strategy]}</span>
+        <button className={`${styles.strategyToggleBtn} ${showStrategy ? styles.strategyToggleBtnActive : ''}`}
+          onClick={() => setShowStrategy(v => !v)}>⚙</button>
+      </div>
+      {showStrategy && (
+        <div className={styles.strategyPanelSidebar}>
+          <div className={styles.strategyRow}>
+            {(['recursive', 'sentence', 'fixed'] as const).map(s => (
+              <button key={s} className={`${styles.strategyOption} ${strategy === s ? styles.strategyOptionActive : ''}`}
+                onClick={() => onStrategyChange(s)}>
+                <span className={styles.strategyName}>{STRATEGY_LABELS[s]}</span>
+                <span className={styles.strategyHint}>{STRATEGY_HINTS[s]}</span>
+              </button>
+            ))}
+          </div>
+          <div className={styles.strategyParams}>
+            <label>切片大小（字符）<input type="number" min={100} max={8000} step={100} value={chunkSize}
+              onChange={e => onChunkSizeChange(Number(e.target.value))} /></label>
+            <label>重叠大小（字符）<input type="number" min={0} max={1000} step={50} value={chunkOverlap}
+              onChange={e => onChunkOverlapChange(Number(e.target.value))} /></label>
+          </div>
+        </div>
+      )}
+
       <div className={styles.sidebarDocLabel}>文档列表 <span className={styles.sidebarDocCount}>{docs.length}</span></div>
       <div className={styles.listScroll}>
         {docs.length === 0 && <div className={styles.emptyList}>暂无文档，请上传文件</div>}
