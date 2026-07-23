@@ -17,8 +17,16 @@ import styles from './GraphViewer.module.css'
 interface Props { docs: Document[] }
 
 const TYPE_COLOR: Record<string, string> = {
-  PERSON: '#a78bfa', ORG: '#60a5fa', GPE: '#34d399',
-  PRODUCT: '#fb923c', LOC: '#f472b6', ENTITY: '#94a3b8',
+  PERSON:     '#818cf8',  // soft indigo
+  ORG:        '#38bdf8',  // sky blue
+  GPE:        '#34d399',  // emerald
+  PRODUCT:    '#fb923c',  // orange
+  LOC:        '#f472b6',  // pink
+  WORK_OF_ART:'#a78bfa',  // violet
+  EVENT:      '#fbbf24',  // amber
+  FAC:        '#6ee7b7',  // teal
+  NORP:       '#93c5fd',  // light blue
+  ENTITY:     '#94a3b8',  // slate
 }
 const TYPE_LABEL: Record<string, string> = {
   PERSON: '人物', ORG: '组织', GPE: '地点', PRODUCT: '产品', LOC: '位置', ENTITY: '实体',
@@ -38,11 +46,73 @@ function GraphCanvas({ data, onNodeClick }: { data: GraphData; onNodeClick: (lab
     const cy = cytoscape({
       container: containerRef.current, elements,
       style: [
-        { selector: 'node', style: { 'background-color': 'data(color)', label: 'data(label)', 'font-size': 11, 'font-family': 'Inter, sans-serif', 'font-weight': '500', color: '#fff', 'text-valign': 'center', 'text-outline-width': 2, 'text-outline-color': 'data(color)', width: 40, height: 40, 'border-width': 0 } },
-        { selector: 'edge', style: { width: 1.2, 'line-color': '#4f52d9', 'line-opacity': 0.5, 'target-arrow-color': '#6366f1', 'target-arrow-shape': 'triangle', 'arrow-scale': 0.8, 'curve-style': 'bezier', label: 'data(label)', 'font-size': 9, 'font-family': 'Inter, sans-serif', color: '#8080a8', 'text-rotation': 'autorotate', 'text-background-color': '#1a1a2e', 'text-background-opacity': 0.75, 'text-background-padding': '2px' } },
-        { selector: 'node:hover', style: { 'border-width': 2, 'border-color': '#fff', 'border-opacity': 0.6 } },
+        {
+          selector: 'node',
+          style: {
+            'background-color': 'data(color)',
+            label: 'data(label)',
+            'font-size': 10,
+            'font-family': '"Inter", "SF Pro Display", -apple-system, sans-serif',
+            'font-weight': '600',
+            color: '#fff',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-outline-width': 2,
+            'text-outline-color': 'data(color)',
+            width: 'label',
+            height: 'label',
+            'padding': '8px',
+            shape: 'round-rectangle',
+            'border-width': 0,
+            'min-width': 32,
+            'min-height': 24,
+          } as any,
+        },
+        {
+          selector: 'edge',
+          style: {
+            width: 1,
+            'line-color': '#64748b',
+            'line-opacity': 0.4,
+            'target-arrow-color': '#64748b',
+            'target-arrow-shape': 'triangle',
+            'arrow-scale': 0.6,
+            'curve-style': 'bezier',
+            label: 'data(label)',
+            'font-size': 8,
+            'font-family': '"Inter", -apple-system, sans-serif',
+            color: '#94a3b8',
+            'text-rotation': 'autorotate',
+            'text-background-opacity': 0,
+            'text-margin-y': -4,
+          } as any,
+        },
+        {
+          selector: 'node:hover',
+          style: { 'border-width': 2, 'border-color': '#fff', 'border-opacity': 0.8, 'z-index': 9999 } as any,
+        },
+        {
+          selector: 'node:selected',
+          style: { 'border-width': 3, 'border-color': '#fff', 'border-opacity': 1 } as any,
+        },
       ],
-      layout: { name: 'cose', animate: true, animationDuration: 400, nodeRepulsion: () => 4500, idealEdgeLength: () => 90, fit: true, padding: 40 } as any,
+      layout: {
+        name: 'cose',
+        animate: true,
+        animationDuration: 500,
+        randomize: false,
+        nodeRepulsion: () => 12000,
+        nodeOverlap: 20,
+        idealEdgeLength: () => 120,
+        edgeElasticity: () => 100,
+        nestingFactor: 1.2,
+        gravity: 80,
+        numIter: 1000,
+        coolingFactor: 0.99,
+        minTemp: 1.0,
+        fit: true,
+        padding: 48,
+      } as any,
     })
     cy.on('tap', 'node', evt => onNodeClick(evt.target.data('label')))
     cyRef.current = cy
