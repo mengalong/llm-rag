@@ -53,7 +53,7 @@ async def _broadcast(event: dict[str, Any]) -> None:
 
 
 async def _watch_loop() -> None:
-    global _last_mtime
+    global _last_mtime, _internal_change
     kuzu_file = os.path.join(settings.graph_dir, "knowledge_graph.kuzu")
 
     while True:
@@ -64,11 +64,8 @@ async def _watch_loop() -> None:
             mtime = os.path.getmtime(kuzu_file)
             if mtime != _last_mtime and _last_mtime != 0.0:
                 if _internal_change:
-                    # File changed because of our own load_snapshot/save_snapshot — skip broadcast
-                    global _internal_change
                     _internal_change = False
                 else:
-                    # External change (e.g. external rebuild) — reset conn, use latest version
                     from app.core.kuzu_store import _reset_conn, get_current_version_from_graph
                     import app.core.kuzu_store as _ks
                     _reset_conn()
