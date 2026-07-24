@@ -84,19 +84,19 @@ export default function GraphOverviewPanel({
               : snap.skip_llm ? `NER·${nerShort}` : `NER·${nerShort}+LLM`
             const llmModel = !snap.skip_llm ? (snap.llm_model ?? '') : ''
             const showNer = !!snap.ner_model && (!snap.strategy || snap.strategy.startsWith('ner_llm'))
-            const ts = new Date(snap.timestamp).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+            const ts = new Date(snap.timestamp).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
             return (
               <div key={ver} className={`${styles.snapshotOverviewCard} ${isNewer ? styles.snapshotOverviewCardNew : styles.snapshotOverviewCardOld}`}>
                 <div className={styles.currentVersionCard}>
                   <div className={styles.currentVersionRow}>
                     <span className={styles.currentVersionBadge}>{ver}</span>
                     <span className={styles.currentVersionLabel}>{isNewer ? '新版本' : '旧版本'}</span>
-                    <span className={styles.currentVersionTs}>{ts}</span>
                   </div>
                   <div className={styles.currentVersionRow}>
                     <span className={styles.currentVersionMeta}>构建策略：{strategyLabel}</span>
                     {llmModel && <span className={styles.currentVersionMeta}>LLM：{llmModel}</span>}
                     {showNer && <span className={styles.currentVersionMeta}>NER：{snap.ner_model}</span>}
+                    <span className={styles.currentVersionMeta}>构建时间：{ts}</span>
                   </div>
                 </div>
                 <div className={styles.overviewCardGridInner}>
@@ -127,9 +127,6 @@ export default function GraphOverviewPanel({
               <div className={styles.currentVersionRow}>
                 <span className={styles.currentVersionBadge}>{activeSnap.version}</span>
                 <span className={styles.currentVersionLabel}>当前图谱版本</span>
-                <span className={styles.currentVersionTs}>
-                  {new Date(activeSnap.timestamp).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                </span>
               </div>
               <div className={styles.currentVersionRow}>
                 {(() => {
@@ -141,10 +138,12 @@ export default function GraphOverviewPanel({
                   const showNer = !!activeSnap.ner_model && (
                     !activeSnap.strategy || activeSnap.strategy.startsWith('ner_llm')
                   )
+                  const ts = new Date(activeSnap.timestamp).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
                   return <>
                     <span className={styles.currentVersionMeta}>构建策略：{strategyLabel}</span>
                     {llmModel && <span className={styles.currentVersionMeta}>LLM：{llmModel}</span>}
                     {showNer && <span className={styles.currentVersionMeta}>NER：{activeSnap.ner_model}</span>}
+                    <span className={styles.currentVersionMeta}>构建时间：{ts}</span>
                   </>
                 })()}
               </div>

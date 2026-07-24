@@ -57,29 +57,60 @@ function AppInner() {
   })
   const activeSession = sessions.find(s => s.id === activeSessionId) ?? sessions[0]
 
-  // On mount: fetch backend sessions and merge (backend wins for matching ids)
+  // On mount: fetch backend sessions; migrate local-only sessions once if not done yet
   useEffect(() => {
+    const MIGRATED_KEY = 'rag_local_migrated'
+    const localSessions = loadSessions()
+    const alreadyMigrated = !!localStorage.getItem(MIGRATED_KEY)
+
     chatListSessions().then(async r => {
       const backendSessions = r.data
-      if (backendSessions.length === 0) return
+      const backendIds = new Set(backendSessions.map(b => b.id))
+
+      let finalData = backendSessions
+
+      if (!alreadyMigrated) {
+        // One-time migration: push local-only sessions to backend
+        const localOnly = localSessions.filter(s => !backendIds.has(s.id))
+        for (const s of localOnly) {
+          try {
+            await chatCreateSession(s.id, s.title, msToIso(s.createdAt))
+            for (const msg of s.messages) {
+              await chatAddMessage(s.id, {
+                role: msg.role,
+                content: msg.content,
+                created_at: msToIso(msg.createdAt ?? s.createdAt),
+                sources: (msg.sources ?? []) as object[],
+                graph_entities: msg.graphEntities ?? [],
+                graph_paths: (msg.graphPaths ?? []) as object[],
+                graph_chunk_ids: msg.graphChunkIds ?? [],
+                graph_version: msg.graphVersion ?? '',
+              })
+            }
+          } catch { /* ignore individual failures */ }
+        }
+        if (localOnly.length > 0) {
+          finalData = (await chatListSessions()).data
+        }
+        localStorage.setItem(MIGRATED_KEY, '1')
+      }
+
       setSessions(prev => {
         const localMap = new Map(prev.map(s => [s.id, s]))
         const merged: ChatSession[] = []
-        const backendIds = new Set(backendSessions.map(b => b.id))
-        // Add backend sessions (messages loaded lazily on select)
-        for (const b of backendSessions) {
+        const finalIds = new Set(finalData.map(b => b.id))
+        for (const b of finalData) {
           const local = localMap.get(b.id)
           merged.push({
             id: b.id,
             title: b.title,
             createdAt: new Date(b.created_at).getTime(),
-            messages: local?.messages ?? [],  // keep local messages if available
+            messages: local?.messages ?? [],
             backendSynced: true,
           })
         }
-        // Append local-only sessions (not yet synced to backend)
         for (const s of prev) {
-          if (!backendIds.has(s.id)) merged.push(s)
+          if (!finalIds.has(s.id)) merged.push(s)
         }
         merged.sort((a, b) => b.createdAt - a.createdAt)
         saveSessions(merged)
@@ -131,17 +162,20 @@ function AppInner() {
   }, [])
   const handleNewSession = useCallback(() => {
     const s = createSession()
-    // Create in backend immediately
+    // Add session to state first (without backendSynced)
+    setSessions(prev => { const next = [...prev, s]; saveSessions(next); return next })
+    handleSessionSelect(s.id)
+    // Create in backend async; when done, mark synced via functional updater
     chatCreateSession(s.id, s.title, msToIso(s.createdAt))
       .then(() => {
-        persistSessions([...sessions, { ...s, backendSynced: true }])
+        setSessions(prev => {
+          const next = prev.map(x => x.id === s.id ? { ...x, backendSynced: true } : x)
+          saveSessions(next)
+          return next
+        })
       })
-      .catch(() => {
-        // Backend unavailable — create locally only
-        persistSessions([...sessions, s])
-      })
-    handleSessionSelect(s.id)
-  }, [sessions, persistSessions, handleSessionSelect])
+      .catch(() => {})
+  }, [handleSessionSelect])
   const handleDeleteSession = useCallback((id: string) => {
     chatDeleteSession(id).catch(() => {})
     const remaining = sessions.filter(s => s.id !== id)

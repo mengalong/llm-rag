@@ -26,7 +26,11 @@ export default function SessionList({ sessions, activeId, onSelect, onNew, onDel
       <div className={styles.label}>历史对话</div>
       <div className={styles.list}>
         {sessions.length === 0 && <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)' }}>暂无历史</div>}
-        {[...sessions].reverse().map((s) => {
+        {[...sessions].sort((a, b) => {
+          const ta = (a.messages.at(-1)?.createdAt ?? a.createdAt)
+          const tb = (b.messages.at(-1)?.createdAt ?? b.createdAt)
+          return tb - ta
+        }).map((s) => {
           const lastMsg = s.messages.length > 0 ? s.messages[s.messages.length - 1] : null
           const ts = lastMsg?.createdAt ?? s.createdAt
           return (
