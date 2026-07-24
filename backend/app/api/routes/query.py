@@ -152,7 +152,7 @@ async def debug_query_stream(question: str, top_k: int = 5):
     from ...core.embedder import get_embedder
     from ...core.vector_store import search
     from ...core.rag_engine import build_sources_from_hits
-    from ...core.graph_store import get_graph
+    from ...core.kuzu_store import get_graph
     from ...core.graph_builder import _node_id
 
     def _hit_to_debug(h: dict, source: str) -> DebugHit:
@@ -289,13 +289,13 @@ async def debug_query_stream(question: str, top_k: int = 5):
         # Collect full answers from queues (already drained above via mirror/stream)
         # Save record to DB
         from ...db.debug_store import DebugRecordStore
-        from ...core.graph_store import list_snapshots
+        from ...core.kuzu_store import list_snapshots
         import os as _os
 
-        # Determine current graph version info — read from embedded tag in graphml
+        # Determine current graph version info
         try:
             from ...core.graph_config import graph_cfg as _gcfg
-            from ...core.graph_store import get_current_version_from_graph, load_snapshot_meta
+            from ...core.kuzu_store import get_current_version_from_graph, load_snapshot_meta
             _gversion = get_current_version_from_graph()
             _meta = load_snapshot_meta(_gversion) or {}
             _gner = _meta.get("ner_model", "")
@@ -357,7 +357,7 @@ async def debug_query(req: DebugRequest):
     from ...core.embedder import get_embedder
     from ...core.vector_store import search
     from ...core.rag_engine import build_sources_from_hits
-    from ...core.graph_store import get_graph
+    from ...core.kuzu_store import get_graph
     from ...core.graph_builder import _node_id
 
     def _hit_to_debug(h: dict, source: str) -> DebugHit:

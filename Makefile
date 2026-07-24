@@ -22,6 +22,7 @@ check:
 	cd backend && conda run --no-capture-output -n llm-rag python -m scripts.check_models
 
 dev-backend:
+	-lsof -ti :9000 | xargs kill -9 2>/dev/null || true
 	cd backend && conda run --no-capture-output -n llm-rag uvicorn app.main:app --reload --port 9000 --log-level info
 
 dev-frontend:

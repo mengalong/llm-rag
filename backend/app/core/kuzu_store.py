@@ -356,8 +356,53 @@ def _conn_to_graph_data(conn: kuzu.Connection) -> GraphData:
     return GD(nodes=nodes, edges=edges, stats=stats)
 
 
-def to_graph_data(conn: kuzu.Connection | None = None) -> GraphData:
-    return _conn_to_graph_data(conn or get_conn())
+def to_graph_data(conn_or_graph: kuzu.Connection | nx.Graph | None = None) -> GraphData:
+    """Convert a Kuzu connection or nx.Graph to GraphData.
+
+    - If None: query the live Kuzu connection.
+    - If kuzu.Connection: query that connection.
+    - If nx.Graph: convert the nx subgraph directly (used by get_subgraph callers).
+    """
+    if isinstance(conn_or_graph, nx.Graph):
+        return _nx_to_graph_data(conn_or_graph)
+    return _conn_to_graph_data(conn_or_graph or get_conn())
+
+
+def _nx_to_graph_data(g: nx.Graph) -> GraphData:
+    from ..models.graph import GraphNode, GraphEdge, GraphStats, GraphData as GD
+    nodes = []
+    for nid, data in g.nodes(data=True):
+        try:
+            doc_list = json.loads(data.get("document_ids", "[]"))
+        except Exception:
+            doc_list = []
+        try:
+            chunk_list = json.loads(data.get("chunk_ids", "[]"))
+        except Exception:
+            chunk_list = []
+        nodes.append(GraphNode(
+            id=str(nid),
+            label=data.get("label", str(nid)),
+            type=data.get("type", "ENTITY"),
+            document_ids=doc_list,
+            chunk_ids=chunk_list,
+        ))
+    edges = []
+    for u, v, data in g.edges(data=True):
+        try:
+            chunk_list = json.loads(data.get("chunk_ids", "[]"))
+        except Exception:
+            chunk_list = []
+        edges.append(GraphEdge(
+            id=str(data.get("id", f"{u}_{v}")),
+            source=str(u),
+            target=str(v),
+            relation=data.get("relation", "co-occurs"),
+            weight=float(data.get("weight", 1.0)),
+            chunk_ids=chunk_list,
+        ))
+    from ..models.graph import GraphStats
+    return GD(nodes=nodes, edges=edges, stats=GraphStats(node_count=len(nodes), edge_count=len(edges)))
 
 
 def get_subgraph(

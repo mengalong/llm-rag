@@ -1,5 +1,4 @@
-"""Graph file watcher — monitors knowledge_graph.graphml for changes
-and reloads the in-memory singleton automatically.
+"""Graph watcher — monitors knowledge_graph.kuzu for changes and broadcasts events.
 
 Usage: call start_watcher() once during app lifespan.
 Subscribers can call subscribe() to get an asyncio.Queue that receives
@@ -48,22 +47,20 @@ async def _broadcast(event: dict[str, Any]) -> None:
 
 async def _watch_loop() -> None:
     global _last_mtime
-    graphml = os.path.join(settings.graph_dir, "knowledge_graph.graphml")
+    kuzu_file = os.path.join(settings.graph_dir, "knowledge_graph.kuzu")
 
     while True:
         await asyncio.sleep(_POLL_INTERVAL)
         try:
-            if not os.path.exists(graphml):
+            if not os.path.exists(kuzu_file):
                 continue
-            mtime = os.path.getmtime(graphml)
+            mtime = os.path.getmtime(kuzu_file)
             if mtime != _last_mtime and _last_mtime != 0.0:
-                # File changed — reset the in-memory singleton
-                import app.core.graph_store as gs
-                gs._graph = None
-                # Read new version tag
-                from app.core.graph_store import get_current_version_from_graph
+                # File changed — reset the Kuzu connection singleton so next request re-opens it
+                from app.core.kuzu_store import _reset_conn, get_current_version_from_graph
+                _reset_conn()
                 version = get_current_version_from_graph()
-                logger.info("Graph file changed — reloaded, version=%s", version)
+                logger.info("Kuzu graph file changed — reset connection, version=%s", version)
                 await _broadcast({"type": "graph_updated", "version": version})
             _last_mtime = mtime
         except Exception as e:
@@ -72,9 +69,9 @@ async def _watch_loop() -> None:
 
 def start_watcher() -> None:
     global _watcher_task, _last_mtime
-    graphml = os.path.join(settings.graph_dir, "knowledge_graph.graphml")
-    if os.path.exists(graphml):
-        _last_mtime = os.path.getmtime(graphml)
+    kuzu_file = os.path.join(settings.graph_dir, "knowledge_graph.kuzu")
+    if os.path.exists(kuzu_file):
+        _last_mtime = os.path.getmtime(kuzu_file)
     _watcher_task = asyncio.create_task(_watch_loop())
     logger.info("Graph file watcher started (poll every %ds)", _POLL_INTERVAL)
 
