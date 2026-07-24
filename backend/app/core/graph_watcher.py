@@ -17,7 +17,14 @@ logger = logging.getLogger("rag.watcher")
 _subscribers: list[asyncio.Queue] = []
 _watcher_task: asyncio.Task | None = None
 _last_mtime: float = 0.0
-_POLL_INTERVAL = 5  # seconds
+_internal_change: bool = False  # set True when load_snapshot/save_snapshot triggers the file change
+
+
+def mark_internal_change() -> None:
+    """Call before any operation that intentionally changes knowledge_graph.kuzu,
+    so the watcher doesn't treat it as an external rebuild."""
+    global _internal_change
+    _internal_change = True
 
 
 def subscribe() -> asyncio.Queue:
@@ -56,12 +63,19 @@ async def _watch_loop() -> None:
                 continue
             mtime = os.path.getmtime(kuzu_file)
             if mtime != _last_mtime and _last_mtime != 0.0:
-                # File changed — reset the Kuzu connection singleton so next request re-opens it
-                from app.core.kuzu_store import _reset_conn, get_current_version_from_graph
-                _reset_conn()
-                version = get_current_version_from_graph()
-                logger.info("Kuzu graph file changed — reset connection, version=%s", version)
-                await _broadcast({"type": "graph_updated", "version": version})
+                if _internal_change:
+                    # File changed because of our own load_snapshot/save_snapshot — skip broadcast
+                    global _internal_change
+                    _internal_change = False
+                else:
+                    # External change (e.g. external rebuild) — reset conn, use latest version
+                    from app.core.kuzu_store import _reset_conn, get_current_version_from_graph
+                    import app.core.kuzu_store as _ks
+                    _reset_conn()
+                    _ks._current_version = None
+                    version = get_current_version_from_graph()
+                    logger.info("Kuzu graph file changed externally — version=%s", version)
+                    await _broadcast({"type": "graph_updated", "version": version})
             _last_mtime = mtime
         except Exception as e:
             logger.warning("Graph watcher error: %s", e)

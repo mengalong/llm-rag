@@ -172,6 +172,7 @@ export default function ChatInterface({
   const [rawMsgIds, setRawMsgIds] = useState<Set<number>>(new Set())
   const [expandedPaths, setExpandedPaths] = useState<Set<number>>(new Set())
   const [entityModal, setEntityModal] = useState<string | null>(null)
+  const [entityModalVersion, setEntityModalVersion] = useState<string | undefined>(undefined)
   const { answer, graphEntities, graphPaths, loading, error, ask, stop } = useSSEQuery()
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -226,7 +227,7 @@ export default function ChatInterface({
     const updated = { ...session, messages: [...session.messages, userMsg] }
     onSessionUpdate(updated)
 
-    ask(q, useGraph, async (finalAnswer, finalSources, finalEntities, finalPaths, finalGraphChunkIds) => {
+    ask(q, useGraph, async (finalAnswer, finalSources, finalEntities, finalPaths, finalGraphChunkIds, finalGraphVersion) => {
       const assistantMsg = {
         role: 'assistant' as const,
         content: finalAnswer,
@@ -234,6 +235,7 @@ export default function ChatInterface({
         graphEntities: finalEntities,
         graphPaths: finalPaths,
         graphChunkIds: finalGraphChunkIds,
+        graphVersion: finalGraphVersion || undefined,
       }
       const withAssistant = { ...updated, messages: [...updated.messages, assistantMsg] }
 
@@ -279,7 +281,7 @@ export default function ChatInterface({
                       <button
                         key={ei}
                         className={styles.entityTag}
-                        onClick={() => setEntityModal(e)}
+                        onClick={() => { setEntityModal(e); setEntityModalVersion(msg.graphVersion) }}
                         title={`查看「${e}」的关系图`}
                       >{e}</button>
                     ))}
@@ -316,7 +318,7 @@ export default function ChatInterface({
                               <span key={ei}>
                                 <button
                                   className={styles.pathEntity}
-                                  onClick={() => setEntityModal(ent)}
+                                  onClick={() => { setEntityModal(ent); setEntityModalVersion(msg.graphVersion) }}
                                 >{ent}</button>
                                 {ei < p.relations.length && (
                                   <span className={styles.pathRelation}> —{p.relations[ei]}→ </span>
@@ -378,7 +380,11 @@ export default function ChatInterface({
       )}
 
       {entityModal && (
-        <GraphEntityModal entity={entityModal} onClose={() => setEntityModal(null)} />
+        <GraphEntityModal
+          entity={entityModal}
+          onClose={() => { setEntityModal(null); setEntityModalVersion(undefined) }}
+          version={entityModalVersion}
+        />
       )}
 
       <div className={styles.inputArea}>

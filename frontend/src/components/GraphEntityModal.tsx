@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import cytoscape, { type Core } from 'cytoscape'
-import { getSubgraph, getSubgraphByVersion, type GraphData } from '../api/client'
+import { getSubgraph, getSubgraphByVersion, getGraphSnapshots, type GraphData } from '../api/client'
 import styles from './GraphEntityModal.module.css'
 
 const TYPE_COLOR: Record<string, string> = {
@@ -35,7 +35,7 @@ function defaultFontSize(sizeIdx = 0): number {
 interface Props {
   entity: string
   onClose: () => void
-  version?: string  // if set, query from historical snapshot
+  version?: string  // if set, query from historical snapshot; if absent, query live graph
 }
 
 export default function GraphEntityModal({ entity: initialEntity, onClose, version }: Props) {
@@ -47,6 +47,34 @@ export default function GraphEntityModal({ entity: initialEntity, onClose, versi
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [sizeIdx, setSizeIdx] = useState(0)
+  // Resolved version + timestamp for display
+  const [resolvedVersion, setResolvedVersion] = useState<string | null>(null)
+  const [resolvedTimestamp, setResolvedTimestamp] = useState<string | null>(null)
+
+  // Fetch snapshots once to get current version + timestamp when no version prop
+  useEffect(() => {
+    if (version) {
+      setResolvedVersion(version)
+      // Look up timestamp from snapshots
+      getGraphSnapshots().then(r => {
+        const snap = r.data.find(s => s.version === version)
+        if (snap) setResolvedTimestamp(snap.timestamp)
+      }).catch(() => {})
+    } else {
+      // Query live current version
+      fetch('/api/v1/graph/current-version')
+        .then(r => r.json())
+        .then(d => {
+          setResolvedVersion(d.version)
+          return getGraphSnapshots()
+        })
+        .then(r => {
+          const snap = r.data[0]  // latest = current
+          if (snap) setResolvedTimestamp(snap.timestamp)
+        })
+        .catch(() => {})
+    }
+  }, [version])
   const [fontSize, setFontSize] = useState<number>(() => defaultFontSize(0))
 
   const fitGraph = useCallback(() => {
@@ -233,6 +261,16 @@ export default function GraphEntityModal({ entity: initialEntity, onClose, versi
             </button>
           )}
           <span className={styles.title}>「{currentEntity}」关系图</span>
+          {resolvedVersion && (
+            <span className={styles.versionBadge}>
+              {resolvedVersion}
+              {resolvedTimestamp && (
+                <span className={styles.versionTs}>
+                  {new Date(resolvedTimestamp).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </span>
+          )}
           {data && <span className={styles.stats}>节点 {data.nodes.length} · 边 {data.edges.length}</span>}
           <div className={styles.resizeBtns}>
             {SIZES.map((s, i) => (

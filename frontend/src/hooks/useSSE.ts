@@ -11,7 +11,7 @@ interface SSEState {
   error: string | null
 }
 
-type DoneCallback = (answer: string, sources: Source[], entities: string[], paths: GraphPath[], graphChunkIds: string[]) => void
+type DoneCallback = (answer: string, sources: Source[], entities: string[], paths: GraphPath[], graphChunkIds: string[], graphVersion: string) => void
 
 export function useSSEQuery() {
   const [state, setState] = useState<SSEState>({
@@ -46,9 +46,10 @@ export function useSSEQuery() {
           const finalEntities = data.graph_entities ?? []
           const finalPaths = data.graph_paths ?? []
           const finalGraphChunkIds = data.graph_chunk_ids ?? []
+          const finalGraphVersion = data.graph_version ?? ''
           console.log('[SSE] done, sources:', finalSources.length)
           es.close()
-          onDone?.(answerRef.current, finalSources, finalEntities, finalPaths, finalGraphChunkIds)
+          onDone?.(answerRef.current, finalSources, finalEntities, finalPaths, finalGraphChunkIds, finalGraphVersion)
           setState({ answer: '', sources: [], graphEntities: [], graphPaths: [], loading: false, error: null })
         } else if (data.token) {
           answerRef.current += data.token

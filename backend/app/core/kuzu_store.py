@@ -264,6 +264,8 @@ def save_snapshot(
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
     logger.info("kuzu_store: snapshot saved as %s", version)
+    global _current_version
+    _current_version = version  # after rebuild, the new version is current
     return version
 
 
@@ -285,6 +287,7 @@ def load_snapshot_meta(version: str) -> dict[str, Any] | None:
 
 
 def load_snapshot_as_current(version: str) -> dict[str, Any]:
+    global _current_version
     meta = load_snapshot_meta(version)
     if meta is None:
         raise FileNotFoundError(f"Snapshot '{version}' not found")
@@ -297,9 +300,18 @@ def load_snapshot_as_current(version: str) -> dict[str, Any]:
     live_path = _live_db_path()
     _reset_conn()
     if live_path.exists():
-        live_path.unlink()  # Kuzu is a single file
+        live_path.unlink()
+
+    # Tell watcher this is an intentional change so it doesn't broadcast graph_updated
+    try:
+        from .graph_watcher import mark_internal_change
+        mark_internal_change()
+    except Exception:
+        pass
+
     shutil.copy2(str(snap_kuzu), str(live_path))
     get_conn()  # re-init connection
+    _current_version = version
     logger.info("kuzu_store: loaded snapshot %s as current", version)
     return meta
 
@@ -518,10 +530,16 @@ def _subgraph_from_ids(conn: kuzu.Connection, node_ids: set[str]) -> nx.Graph:
     return g
 
 
+_current_version: str | None = None  # tracks the explicitly loaded version
+
+
 # ── Version tag ────────────────────────────────────────────────────────────────
 
 def get_current_version_from_graph() -> str:
-    """Return the version of the most recent snapshot that matches the live graph."""
+    """Return the currently active graph version."""
+    if _current_version is not None:
+        return _current_version
+    # Fall back to most recent snapshot on first load
     snaps = list_snapshots()
     return snaps[0]["version"] if snaps else "unknown"
 

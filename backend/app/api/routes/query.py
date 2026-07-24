@@ -129,12 +129,15 @@ async def query_stream(question: str, top_k: int = 5, use_graph: bool = True):
     async def event_stream():
         async for token in _stream_llm(question, context):
             yield f"data: {json.dumps({'token': token})}\n\n"
+        from ...core.kuzu_store import get_current_version_from_graph
+        graph_version = get_current_version_from_graph() if use_graph else ""
         done_data = json.dumps({
             "done": True,
             "sources": [s.model_dump() for s in sources],
             "graph_entities": graph_entities,
             "graph_paths": [p.model_dump() for p in graph_paths],
             "graph_chunk_ids": list(graph_chunk_ids),
+            "graph_version": graph_version,
         })
         yield f"data: {done_data}\n\n"
 

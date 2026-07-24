@@ -81,6 +81,26 @@
   flex-shrink: 0;
 }
 
+.versionBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 4px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.versionTs {
+  font-weight: 400;
+  opacity: 0.85;
+  font-size: 10px;
+}
+
 .resizeBtns {
   display: flex;
   gap: 4px;

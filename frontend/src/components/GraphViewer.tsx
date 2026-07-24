@@ -177,6 +177,8 @@ export default function GraphViewer({ docs, isActive = true }: Props) {
       try {
         const data = JSON.parse(event.data)
         if (data.type === 'graph_updated') {
+          // Only auto-refresh if user hasn't manually selected a version
+          // The backend broadcasts when an external rebuild happens
           refreshAll(); setDocGraphData(null); setSubgraphData(null)
           setDiffResult(null); setDiffV1(null); setDiffV2(null)
           setToast(`图谱已更新，已加载 ${data.version}`)
@@ -260,7 +262,13 @@ export default function GraphViewer({ docs, isActive = true }: Props) {
       {!overview && !diffResult && (
         <div className={styles.empty}>从左侧搜索实体或选择文档查看图谱</div>
       )}
-      {modalEntity && <GraphEntityModal entity={modalEntity} onClose={() => setModalEntity(null)} />}
+      {modalEntity && (
+        <GraphEntityModal
+          entity={modalEntity}
+          onClose={() => setModalEntity(null)}
+          version={activeVersion ?? undefined}
+        />
+      )}
       {toast && <div className={styles.updateToast}>{toast}</div>}
     </div>
   )

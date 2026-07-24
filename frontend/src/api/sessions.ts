@@ -10,6 +10,7 @@ export interface ChatMessage {
   graphEntities?: string[]
   graphPaths?: GraphPath[]
   graphChunkIds?: string[]
+  graphVersion?: string  // version of the graph used for retrieval
 }
 
 export interface ChatSession {
