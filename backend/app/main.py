@@ -26,6 +26,9 @@ async def lifespan(app: FastAPI):
     from .db.debug_store import DebugRecordStore
     debug_store = DebugRecordStore(settings.db_path)
     await debug_store.init()
+    from .db.chat_store import ChatStore
+    chat_store = ChatStore(settings.db_path)
+    await chat_store.init()
     logger.info("Database initialized at %s", settings.db_path)
     from .core.graph_watcher import start_watcher, stop_watcher
     start_watcher()

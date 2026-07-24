@@ -302,3 +302,52 @@ export const debugQueryStream = (question: string, topK: number) =>
 
 export const debugQuery = (question: string, topK: number) =>
   api.post<DebugResult>('/query/debug', { question, top_k: topK })
+
+// ── Chat session persistence ────────────────────────────────────────────────
+
+export interface BackendSession {
+  id: string
+  title: string
+  created_at: string
+  updated_at: string
+  message_count?: number
+}
+
+export interface BackendMessage {
+  id: string
+  session_id: string
+  role: string
+  content: string
+  created_at: string
+  sources: import('./client').Source[]
+  graph_entities: string[]
+  graph_paths: { entities: string[]; relations: string[] }[]
+  graph_chunk_ids: string[]
+  graph_version: string
+}
+
+export const chatListSessions = () =>
+  api.get<BackendSession[]>('/chat/sessions')
+
+export const chatCreateSession = (id: string, title: string, created_at: string) =>
+  api.post<BackendSession>('/chat/sessions', { id, title, created_at })
+
+export const chatUpdateTitle = (id: string, title: string) =>
+  api.put(`/chat/sessions/${id}/title`, { title })
+
+export const chatDeleteSession = (id: string) =>
+  api.delete(`/chat/sessions/${id}`)
+
+export const chatGetMessages = (sessionId: string) =>
+  api.get<BackendMessage[]>(`/chat/sessions/${sessionId}/messages`)
+
+export const chatAddMessage = (sessionId: string, msg: {
+  role: string
+  content: string
+  created_at: string
+  sources?: object[]
+  graph_entities?: string[]
+  graph_paths?: object[]
+  graph_chunk_ids?: string[]
+  graph_version?: string
+}) => api.post<BackendMessage>(`/chat/sessions/${sessionId}/messages`, msg)

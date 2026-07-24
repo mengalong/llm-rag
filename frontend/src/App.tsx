@@ -10,8 +10,13 @@ import { useDocuments } from './hooks/useDocuments'
 import {
   loadSessions, saveSessions, createSession,
   loadActiveSessionId, saveActiveSessionId,
+  msToIso,
   type ChatSession,
 } from './api/sessions'
+import {
+  chatListSessions, chatCreateSession, chatUpdateTitle,
+  chatDeleteSession, chatAddMessage, chatGetMessages,
+} from './api/client'
 import './App.css'
 
 type Tab = 'chat' | 'docs' | 'graph' | 'debug'
@@ -38,7 +43,7 @@ function AppInner() {
   const [theme, toggleTheme] = useTheme()
   const { sidebarContent } = useSidebar()
 
-  // Sessions
+  // Sessions — load from localStorage (legacy) + backend on mount
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
     const saved = loadSessions()
     return saved.length > 0 ? saved : [createSession()]
@@ -52,6 +57,65 @@ function AppInner() {
   })
   const activeSession = sessions.find(s => s.id === activeSessionId) ?? sessions[0]
 
+  // On mount: fetch backend sessions and merge (backend wins for matching ids)
+  useEffect(() => {
+    chatListSessions().then(async r => {
+      const backendSessions = r.data
+      if (backendSessions.length === 0) return
+      setSessions(prev => {
+        const localMap = new Map(prev.map(s => [s.id, s]))
+        const merged: ChatSession[] = []
+        const backendIds = new Set(backendSessions.map(b => b.id))
+        // Add backend sessions (messages loaded lazily on select)
+        for (const b of backendSessions) {
+          const local = localMap.get(b.id)
+          merged.push({
+            id: b.id,
+            title: b.title,
+            createdAt: new Date(b.created_at).getTime(),
+            messages: local?.messages ?? [],  // keep local messages if available
+            backendSynced: true,
+          })
+        }
+        // Append local-only sessions (not yet synced to backend)
+        for (const s of prev) {
+          if (!backendIds.has(s.id)) merged.push(s)
+        }
+        merged.sort((a, b) => b.createdAt - a.createdAt)
+        saveSessions(merged)
+        return merged
+      })
+    }).catch(() => {/* backend unavailable, use localStorage */})
+  }, [])
+
+  // When active session changes, load its messages from backend if needed
+  useEffect(() => {
+    if (!activeSessionId) return
+    setSessions(prev => {
+      const s = prev.find(x => x.id === activeSessionId)
+      if (!s?.backendSynced || s.messages.length > 0) return prev
+      // Messages not yet loaded — fetch async
+      chatGetMessages(activeSessionId).then(r => {
+        const msgs = r.data.map(m => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          sources: m.sources ?? [],
+          graphEntities: m.graph_entities ?? [],
+          graphPaths: m.graph_paths ?? [],
+          graphChunkIds: m.graph_chunk_ids ?? [],
+          graphVersion: m.graph_version || undefined,
+          createdAt: new Date(m.created_at).getTime(),
+        }))
+        setSessions(p => {
+          const next = p.map(x => x.id === activeSessionId ? { ...x, messages: msgs } : x)
+          saveSessions(next)
+          return next
+        })
+      }).catch(() => {})
+      return prev
+    })
+  }, [activeSessionId])
+
   const persistSessions = useCallback((updated: ChatSession[]) => {
     setSessions(updated); saveSessions(updated)
   }, [])
@@ -63,14 +127,28 @@ function AppInner() {
   }, [])
   const handleSessionTitleUpdate = useCallback((id: string, title: string) => {
     setSessions(prev => { const next = prev.map(s => s.id === id ? { ...s, title } : s); saveSessions(next); return next })
+    chatUpdateTitle(id, title).catch(() => {})
   }, [])
   const handleNewSession = useCallback(() => {
-    const s = createSession(); persistSessions([...sessions, s]); handleSessionSelect(s.id)
+    const s = createSession()
+    // Create in backend immediately
+    chatCreateSession(s.id, s.title, msToIso(s.createdAt))
+      .then(() => {
+        persistSessions([...sessions, { ...s, backendSynced: true }])
+      })
+      .catch(() => {
+        // Backend unavailable — create locally only
+        persistSessions([...sessions, s])
+      })
+    handleSessionSelect(s.id)
   }, [sessions, persistSessions, handleSessionSelect])
   const handleDeleteSession = useCallback((id: string) => {
+    chatDeleteSession(id).catch(() => {})
     const remaining = sessions.filter(s => s.id !== id)
     if (remaining.length === 0) {
-      const s = createSession(); persistSessions([s]); handleSessionSelect(s.id)
+      const s = createSession()
+      chatCreateSession(s.id, s.title, msToIso(s.createdAt)).catch(() => {})
+      persistSessions([s]); handleSessionSelect(s.id)
     } else {
       persistSessions(remaining)
       if (activeSessionId === id) handleSessionSelect(remaining[remaining.length - 1].id)

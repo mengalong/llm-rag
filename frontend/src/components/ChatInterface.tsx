@@ -6,7 +6,8 @@ import SourcePanel from './SourcePanel'
 import SessionList from './SessionList'
 import GraphEntityModal from './GraphEntityModal'
 import { useSidebar } from '../context/SidebarContext'
-import { type ChatSession, type GraphPath, generateSessionTitle } from '../api/sessions'
+import { type ChatSession, type GraphPath, generateSessionTitle, msToIso } from '../api/sessions'
+import { chatCreateSession, chatAddMessage } from '../api/client'
 import styles from './ChatInterface.module.css'
 
 function SessionListSidebar({ sessions, activeId, onSelect, onNew, onDelete }: {
@@ -222,12 +223,29 @@ export default function ChatInterface({
     setInput('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
-    const userMsg = { role: 'user' as const, content: q }
+    const now = Date.now()
+    const userMsg = { role: 'user' as const, content: q, createdAt: now }
     const isFirstMessage = session.messages.length === 0
     const updated = { ...session, messages: [...session.messages, userMsg] }
     onSessionUpdate(updated)
 
+    // Ensure session exists in backend before writing messages
+    const ensureSession = session.backendSynced
+      ? Promise.resolve()
+      : chatCreateSession(session.id, session.title, msToIso(session.createdAt))
+          .then(() => {
+            // mark synced — App will handle this via title update or next render
+          })
+          .catch(() => {})
+
+    ensureSession.then(() => {
+      chatAddMessage(session.id, {
+        role: 'user', content: q, created_at: msToIso(now),
+      }).catch(() => {})
+    })
+
     ask(q, useGraph, async (finalAnswer, finalSources, finalEntities, finalPaths, finalGraphChunkIds, finalGraphVersion) => {
+      const answerTs = Date.now()
       const assistantMsg = {
         role: 'assistant' as const,
         content: finalAnswer,
@@ -236,13 +254,23 @@ export default function ChatInterface({
         graphPaths: finalPaths,
         graphChunkIds: finalGraphChunkIds,
         graphVersion: finalGraphVersion || undefined,
+        createdAt: answerTs,
       }
       const withAssistant = { ...updated, messages: [...updated.messages, assistantMsg] }
-
-      // Write messages immediately — no waiting for title
       onSessionUpdate(withAssistant)
 
-      // Generate title in background, update only title field (no messages re-render)
+      // Persist assistant message to backend
+      chatAddMessage(session.id, {
+        role: 'assistant',
+        content: finalAnswer,
+        created_at: msToIso(answerTs),
+        sources: finalSources as object[],
+        graph_entities: finalEntities,
+        graph_paths: finalPaths as object[],
+        graph_chunk_ids: finalGraphChunkIds,
+        graph_version: finalGraphVersion || '',
+      }).catch(() => {})
+
       if (isFirstMessage) {
         generateSessionTitle(q, finalAnswer).then((title) => {
           onSessionTitleUpdate(session.id, title)
@@ -341,6 +369,11 @@ export default function ChatInterface({
                 )}
               </div>
               {msg.role === 'user' && <UserAvatar />}
+              {msg.createdAt && (
+                <span className={styles.msgTs}>
+                  {new Date(msg.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
             </div>
           ))}
 

@@ -11,6 +11,7 @@ export interface ChatMessage {
   graphPaths?: GraphPath[]
   graphChunkIds?: string[]
   graphVersion?: string  // version of the graph used for retrieval
+  createdAt?: number     // epoch ms
 }
 
 export interface ChatSession {
@@ -18,6 +19,7 @@ export interface ChatSession {
   title: string
   createdAt: number
   messages: ChatMessage[]
+  backendSynced?: boolean  // true once session exists in backend
 }
 
 const STORAGE_KEY = 'rag_chat_sessions'
@@ -63,6 +65,12 @@ export async function generateSessionTitle(question: string, answer: string): Pr
   }
 }
 
-function fallbackTitle(question: string): string {
-  return question.slice(0, 20) + (question.length > 20 ? '…' : '')
+/** Convert backend ISO timestamp to epoch ms */
+export function isoToMs(iso: string): number {
+  return new Date(iso).getTime()
+}
+
+/** Convert epoch ms to ISO string for backend */
+export function msToIso(ms: number): string {
+  return new Date(ms).toISOString()
 }
