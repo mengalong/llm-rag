@@ -258,17 +258,30 @@ export default function GraphViewer({ docs, isActive = true }: Props) {
           activeVersion={activeVersion} diffV1={diffV1} diffV2={diffV2} diffResult={diffResult}
           onEntityClick={handleEntityClick} />
       )}
-      {diffResult && <GraphDiffPanel diffResult={diffResult} onEntityClick={handleEntityClick} />}
+      {diffResult && (
+        <GraphDiffPanel
+          diffResult={diffResult}
+          onEntityClick={(label, version) => version ? setModalEntity(`${label}::${version}`) : setModalEntity(label)}
+          v1={diffResult.v1}
+          v2={diffResult.v2}
+        />
+      )}
       {!overview && !diffResult && (
         <div className={styles.empty}>从左侧搜索实体或选择文档查看图谱</div>
       )}
-      {modalEntity && (
-        <GraphEntityModal
-          entity={modalEntity}
-          onClose={() => setModalEntity(null)}
-          version={activeVersion ?? undefined}
-        />
-      )}
+      {modalEntity && (() => {
+        // Support "label::version" encoding from diff panel for removed nodes
+        const [entityLabel, entityVersion] = modalEntity.includes('::')
+          ? modalEntity.split('::')
+          : [modalEntity, activeVersion ?? undefined]
+        return (
+          <GraphEntityModal
+            entity={entityLabel}
+            onClose={() => setModalEntity(null)}
+            version={entityVersion}
+          />
+        )
+      })()}
       {toast && <div className={styles.updateToast}>{toast}</div>}
     </div>
   )

@@ -12,10 +12,12 @@ const TYPE_COLOR: Record<string, string> = {
 
 interface Props {
   diffResult: GraphDiff
-  onEntityClick: (label: string) => void
+  onEntityClick: (label: string, version?: string) => void
+  v1?: string  // older version — removed nodes exist here
+  v2?: string  // newer version — added nodes exist here
 }
 
-export default function GraphDiffPanel({ diffResult, onEntityClick }: Props) {
+export default function GraphDiffPanel({ diffResult, onEntityClick, v1, v2 }: Props) {
   const [search, setSearch] = useState('')
 
   const filtered = useMemo(() => {
@@ -67,7 +69,8 @@ export default function GraphDiffPanel({ diffResult, onEntityClick }: Props) {
           </div>
           <div className={styles.diffColScroll}>
             {filtered.removed.map((n, i) => (
-              <div key={i} className={`${styles.diffNode} ${styles.diffNodeRemoved}`}>
+              <div key={i} className={`${styles.diffNode} ${styles.diffNodeRemoved} ${styles.diffNodeClickable}`}
+                onClick={() => onEntityClick(n.label, v1)}>
                 <div className={styles.nodeTypeDot} style={{ background: TYPE_COLOR[n.type] ?? TYPE_COLOR.ENTITY }} />
                 <span className={styles.diffNodeLabel}>{n.label}</span>
                 <span className={styles.diffNodeType}>{n.type}</span>
