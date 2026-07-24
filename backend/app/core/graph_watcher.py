@@ -17,7 +17,8 @@ logger = logging.getLogger("rag.watcher")
 _subscribers: list[asyncio.Queue] = []
 _watcher_task: asyncio.Task | None = None
 _last_mtime: float = 0.0
-_internal_change: bool = False  # set True when load_snapshot/save_snapshot triggers the file change
+_internal_change: bool = False
+_POLL_INTERVAL = 5  # seconds
 
 
 def mark_internal_change() -> None:
